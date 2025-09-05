@@ -240,9 +240,37 @@
       return;
     }
     try {
-      var win = window.open("", "_blank");
+      var win = window.open("", "_blank", "width=200,height=300");
       if (!win) {
-        alert("Popup diblokir. Silakan izinkan popup untuk mencetak struk.");
+        alert("Popup diblokir. Silakan izinkan popup di pengaturan browser Anda.");
+        // Fallback: Tampilkan struk di dalam div di halaman saat ini
+        var struk = document.createElement("div");
+        struk.style.position = "fixed";
+        struk.style.top = "0";
+        struk.style.left = "0";
+        struk.style.width = "100%";
+        struk.style.height = "100%";
+        struk.style.background = "rgba(0,0,0,0.8)";
+        struk.style.color = "#fff";
+        struk.style.padding = "20px";
+        struk.style.zIndex = "1000";
+        struk.style.overflowY = "auto";
+
+        var lines = [];
+        lines.push("[NAMA TOKO ANDA]");
+        lines.push("Jl. Alamat Toko No. 123");
+        lines.push("--------------------------------");
+        cart.forEach(function(it){
+          lines.push("["+it.operator+"] "+it.nama);
+          lines.push("  "+it.qty+" x "+rupiah(it.harga)+"  =  "+rupiah(it.harga*it.qty));
+        });
+        lines.push("--------------------------------");
+        lines.push("TOTAL    : "+rupiah(totals.grand));
+        lines.push(new Date().toLocaleString("id-ID"));
+        lines.push("Terima kasih.");
+
+        struk.innerHTML = "<pre>" + lines.join("\n") + "</pre><button onclick='this.parentElement.remove()'>Tutup</button>";
+        document.body.appendChild(struk);
         return;
       }
       var doc = win.document;
@@ -275,10 +303,14 @@
       html.appendChild(head); html.appendChild(body);
       doc.write(html.outerHTML); doc.close();
 
-      win.focus(); win.print(); win.close();
+      win.focus();
+      setTimeout(function() { // Tambahkan delay untuk memastikan jendela dimuat
+        win.print();
+        win.close();
+      }, 500);
     } catch(e) {
       console.error("Error saat mencetak struk:", e);
-      alert("Gagal mencetak struk. Cek konsol untuk detail.");
+      alert("Gagal mencetak struk. Cek konsol untuk detail atau coba lagi.");
     }
   }
 
@@ -298,7 +330,6 @@
       alert("Gagal load data. Cek API_URL & permission Web App.");
     });
 
-    // Pastikan elemen ada sebelum menambahkan event listener
     var btnAdd = document.getElementById("btnAdd");
     var btnReload = document.getElementById("btnReload");
     var btnReset = document.getElementById("btnReset");
