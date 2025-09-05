@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Kalkulator Voucher</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Kalkulator Voucher</h1>
+      <p>Hitung total pembelian voucher pulsa/data</p>
+    </header>
+    <div class="content">
+      <div class="panel">
+        <!-- <div class="panel-tools">
+          <button id="btnReload" class="btn btn-ghost">Reload</button>
+          <button id="btnToggleDbg" class="btn btn-ghost">Debug</button>
+        </div> -->
+        <div class="row">
+          <div class="col">
+            <label for="opSelect">Operator</label>
+            <div id="opSelect"></div>
+          </div>
+          <div class="col">
+            <label for="voucherSelect">Voucher</label>
+            <div id="voucherSelect"></div>
+          </div>
+          <div class="qty-group">
+            <label for="qty">Qty</label>
+            <input type="number" id="qty" min="1" value="1" class="qty-input">
+            <button id="btnAdd" class="btn">Tambah</button>
+          </div>
+        </div>
+        <div id="err"></div>
+      </div>
+
+      <h2>Keranjang Belanja</h2>
+      <div class="table-wrapper">
+        <table id="cart">
+          <thead>
+            <tr>
+              <th>Operator</th>
+              <th>Nama Voucher</th>
+              <th>Harga</th>
+              <th>Qty</th>
+              <th>Subtotal</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="chip-total">
+        <span class="total-label">Grand Total</span>
+        <span id="grand" class="total-value">0</span>
+      </div>
+
+      <div class="toolbar">
+        <button id="btnPrint" class="btn">Cetak Struk (58mm)</button>
+        <button id="btnReset" class="btn btn-ghost">Reset Keranjang</button>
+      </div>
+
+      <div id="dbg" class="panel">
+        <h3>Panel Debug</h3>
+        <p><b>API_URL:</b> <code id="dbg_url"></code></p>
+        <p><b>Status:</b> <code id="dbg_status"></code></p>
+        <p><b>Content-Type:</b> <code id="dbg_ct"></code></p>
+        <p><b>Jumlah Data:</b> <code id="dbg_count"></code></p>
+        <p><b>Operator:</b> <code id="dbg_ops"></code></p>
+        <p><b>Sampel (3 baris):</b><pre id="dbg_sample"></pre></p>
+        <p><b>Cuplikan Respons Mentah (awal 600 char):</b><pre id="dbg_raw"></pre></p>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
