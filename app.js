@@ -247,7 +247,7 @@
       var maxLength = 32; // lebar struk
       cart.forEach(function(it) {
         var subtotal = rupiah(it.harga * it.qty);
-        var qtyLine = it.qty + " x " + rupiah(it.harga) + "=";
+        var qtyLine = it.qty + " x " + rupiah(it.harga);
       
         // Panjang kiri (qtyLine) dan kanan (subtotal)
         var leftPart = qtyLine;
@@ -272,7 +272,7 @@
         var padding = " ".repeat(paddingLength);
       
         lines.push("[" + it.operator + "] " + it.nama);
-        lines.push(leftPart + padding + rightPart);
+        lines.push(leftPart + "=" + padding + rightPart);
       });
       lines.push("--------------------------------");
       // TOTAL baris
