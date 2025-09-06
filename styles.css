@@ -174,6 +174,8 @@ label {
 
 input[type="number"] {
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: textfield; /* Removes spinners in Firefox */
   color: var(--text);
   background: #121a26;
   border: 1px solid rgba(124,215,255,0.22);
@@ -183,6 +185,11 @@ input[type="number"] {
   outline: none;
   font-size: 16px;
   touch-action: manipulation;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none; /* Removes spinners in WebKit browsers */
+  margin: 0;
 }
 input[type="number"]:focus {
   border-color: var(--accent-2);
@@ -246,6 +253,12 @@ thead th {
   font-weight: 600;
   font-size: 13px;
 }
+thead th:first-child {
+  border-top-left-radius: var(--radius);
+}
+thead th:last-child {
+  border-top-right-radius: var(--radius);
+}
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:nth-child(even) { background: rgba(255,255,255,0.03); }
 .right { text-align: center; }
@@ -260,9 +273,42 @@ tbody tr:nth-child(even) { background: rgba(255,255,255,0.03); }
 }
 
 table td:nth-child(4), table th:nth-child(4) {
-  width: 60px;
-  min-width: 60px;
+  width: 120px; /* Increased to accommodate buttons */
+  min-width: 120px;
   padding: 8px 2px;
+}
+
+.qty-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0 auto;
+}
+
+.qty-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.06));
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.qty-btn:hover {
+  background: linear-gradient(180deg, rgba(124,215,255,0.25), rgba(90,176,255,0.14));
+  border-color: rgba(124,215,255,0.6);
+}
+
+.qty-btn:active {
+  transform: translateY(1px);
 }
 
 .chip-total {
@@ -324,8 +370,13 @@ pre { white-space: pre-wrap; word-break: break-word; background: rgba(255,255,25
     height: 28px;
   }
   table td:nth-child(4), table th:nth-child(4) {
-    width: 50px;
-    min-width: 50px;
+    width: 100px; /* Adjusted for smaller screens */
+    min-width: 100px;
     padding: 6px 2px;
+  }
+  .qty-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
   }
 }
