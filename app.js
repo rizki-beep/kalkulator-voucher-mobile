@@ -241,8 +241,8 @@
     }
     try {
       var lines = [];
-      lines.push("[NAMA TOKO ANDA]");
-      lines.push("Jl. Alamat Toko No. 123");
+      lines.push("STRUK PEMBELIAN VOUCHER");
+      // lines.push("Jl. Pahlawan Unit");
       lines.push("--------------------------------");
       var maxLength = 32; // lebar struk
       cart.forEach(function(it) {
@@ -272,7 +272,7 @@
         var padding = " ".repeat(paddingLength);
       
         lines.push("[" + it.operator + "] " + it.nama);
-        lines.push(leftPart + "=" + padding + rightPart);
+        lines.push(leftPart + "  =" + padding + rightPart);
       });
       lines.push("--------------------------------");
       // TOTAL baris
