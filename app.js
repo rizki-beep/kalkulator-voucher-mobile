@@ -280,14 +280,29 @@
         lines.push("  " + leftPart + padding + subtotal);
       });
 
-      lines.push("--------------------------------");
-      var totalLabel = "TOTAL :";
-      var totalValue = rupiah(totals.grand);
-      var totalPadding = " ".repeat(maxLength - totalLabel.length - totalValue.length);
-      lines.push(totalLabel + totalPadding + totalValue);
+      // lines.push("--------------------------------");
+      // var totalLabel = "TOTAL :";
+      // var totalValue = rupiah(totals.grand);
+      // var totalPadding = " ".repeat(maxLength - totalLabel.length - totalValue.length);
+      // lines.push(totalLabel + totalPadding + totalValue);
 
+      // lines.push(new Date().toLocaleString("id-ID"));
+      // lines.push("Terima kasih.");
+      lines.push("--------------------------------");
+
+      // TOTAL baris
+      var totalLabel = "TOTAL =";
+      var totalValue = rupiah(totals.grand);
+      
+      // panjang kiri (label + spasi)
+      var leftPart = totalLabel;
+      var totalPadding = " ".repeat(maxLength - leftPart.length - totalValue.length);
+      
+      lines.push(leftPart + totalPadding + totalValue);
+      
       lines.push(new Date().toLocaleString("id-ID"));
       lines.push("Terima kasih.");
+
 
       var receiptText = lines.join("\n");
 
