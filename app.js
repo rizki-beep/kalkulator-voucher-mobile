@@ -273,11 +273,11 @@
         var qtyLine = it.qty + " x " + rupiah(it.harga);
 
         // panjang kiri (qtyLine + spasi + tanda '=')
-        var leftPart = qtyLine + " =";
+        var leftPart = qtyLine;
         var padding = " ".repeat(maxLength - leftPart.length - subtotal.length);
 
         lines.push("[" + it.operator + "] " + it.nama);
-        lines.push("  " + leftPart + padding + subtotal);
+        lines.push(leftPart + padding + subtotal);
       });
 
       // lines.push("--------------------------------");
