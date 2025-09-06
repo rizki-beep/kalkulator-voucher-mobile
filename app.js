@@ -267,28 +267,48 @@
       lines.push("Jl. Alamat Toko No. 123");
       lines.push("--------------------------------");
 
+      // var maxLength = 32; // lebar struk
+      // cart.forEach(function(it){
+      //   var subtotal = rupiah(it.harga * it.qty);
+      //   var qtyLine = it.qty + " x " + rupiah(it.harga);
+
+      //   // panjang kiri (qtyLine + spasi + tanda '=')
+      //   var leftPart = qtyLine;
+      //   var padding = " ".repeat(maxLength - leftPart.length - subtotal.length);
+
+      //   lines.push("[" + it.operator + "] " + it.nama);
+      //   lines.push(leftPart + padding + subtotal);
+      // });
       var maxLength = 32; // lebar struk
-      cart.forEach(function(it){
+      cart.forEach(function(it) {
         var subtotal = rupiah(it.harga * it.qty);
         var qtyLine = it.qty + " x " + rupiah(it.harga);
-
-        // panjang kiri (qtyLine + spasi + tanda '=')
+      
+        // Panjang kiri (qtyLine) dan kanan (subtotal)
         var leftPart = qtyLine;
-        var padding = " ".repeat(maxLength - leftPart.length - subtotal.length);
-
+        var rightPart = subtotal;
+      
+        // Hitung panjang padding
+        var totalLength = leftPart.length + rightPart.length;
+        var paddingLength = maxLength - totalLength;
+      
+        // Pastikan padding tidak negatif
+        if (paddingLength < 0) {
+          // Jika total panjang melebihi maxLength, potong leftPart atau rightPart
+          var excess = totalLength - maxLength;
+          if (leftPart.length > rightPart.length) {
+            leftPart = leftPart.substring(0, leftPart.length - excess - 1); // Kurangi leftPart
+          } else {
+            rightPart = rightPart.substring(0, rightPart.length - excess - 1); // Kurangi rightPart
+          }
+          paddingLength = maxLength - (leftPart.length + rightPart.length); // Hitung ulang padding
+        }
+      
+        var padding = " ".repeat(paddingLength);
+      
         lines.push("[" + it.operator + "] " + it.nama);
-        lines.push(leftPart + padding + subtotal);
+        lines.push(leftPart + padding + rightPart);
       });
-
-      // lines.push("--------------------------------");
-      // var totalLabel = "TOTAL :";
-      // var totalValue = rupiah(totals.grand);
-      // var totalPadding = " ".repeat(maxLength - totalLabel.length - totalValue.length);
-      // lines.push(totalLabel + totalPadding + totalValue);
-
-      // lines.push(new Date().toLocaleString("id-ID"));
-      // lines.push("Terima kasih.");
-      lines.push("--------------------------------");
 
       // TOTAL baris
       var totalLabel = "TOTAL =";
