@@ -240,45 +240,10 @@
       return;
     }
     try {
-      // var lines = [];
-      // lines.push("[NAMA TOKO ANDA]");
-      // lines.push("Jl. Alamat Toko No. 123");
-      // lines.push("--------------------------------");
-      
-      // // Calculate the maximum length for alignment
-      // var maxLength = 32; // Assuming 32 characters is the desired width for receipt
-      // cart.forEach(function(it){
-      //   var subtotal = rupiah(it.harga * it.qty);
-      //   var qtyLine = it.qty + " x " + rupiah(it.harga);
-      //   var padding = " ".repeat(maxLength - qtyLine.length - subtotal.length - 4); // Adjust padding
-      //   lines.push("["+it.operator+"] "+it.nama);
-      //   lines.push("  " + qtyLine + padding + "=  " + subtotal);
-      // });
-      // lines.push("--------------------------------");
-      // var totalLabel = "TOTAL    : ";
-      // var totalValue = rupiah(totals.grand);
-      // var totalPadding = " ".repeat(maxLength - totalLabel.length - totalValue.length);
-      // lines.push(totalLabel + totalPadding + totalValue);
-      // lines.push(new Date().toLocaleString("id-ID"));
-      // lines.push("Terima kasih.");
-
       var lines = [];
       lines.push("[NAMA TOKO ANDA]");
       lines.push("Jl. Alamat Toko No. 123");
       lines.push("--------------------------------");
-
-      // var maxLength = 32; // lebar struk
-      // cart.forEach(function(it){
-      //   var subtotal = rupiah(it.harga * it.qty);
-      //   var qtyLine = it.qty + " x " + rupiah(it.harga);
-
-      //   // panjang kiri (qtyLine + spasi + tanda '=')
-      //   var leftPart = qtyLine;
-      //   var padding = " ".repeat(maxLength - leftPart.length - subtotal.length);
-
-      //   lines.push("[" + it.operator + "] " + it.nama);
-      //   lines.push(leftPart + padding + subtotal);
-      // });
       var maxLength = 32; // lebar struk
       cart.forEach(function(it) {
         var subtotal = rupiah(it.harga * it.qty);
@@ -309,7 +274,7 @@
         lines.push("[" + it.operator + "] " + it.nama);
         lines.push(leftPart + padding + rightPart);
       });
-
+      lines.push("--------------------------------");
       // TOTAL baris
       var totalLabel = "TOTAL =";
       var totalValue = rupiah(totals.grand);
@@ -319,8 +284,17 @@
       var totalPadding = " ".repeat(maxLength - leftPart.length - totalValue.length);
       
       lines.push(leftPart + totalPadding + totalValue);
-      
-      lines.push(new Date().toLocaleString("id-ID"));
+      lines.push(" ");
+      // lines.push(new Date().toLocaleString("id-ID"));
+      lines.push(new Date().toLocaleString("id-ID", {
+        day: "numeric",
+        month: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      }));
       lines.push("Terima kasih.");
 
 
