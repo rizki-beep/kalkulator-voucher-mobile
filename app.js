@@ -236,55 +236,10 @@
   function printReceipt() {
     var totals = calcTotals();
     if (cart.length === 0) {
-      alert("Keranjang kosong, tidak ada yang bisa dicetak.");
+      alert("Keranjang kosong, tidak ada yang bisa dibagikan.");
       return;
     }
     try {
-      var win = window.open("", "_blank", "width=200,height=300");
-      if (!win) {
-        alert("Popup diblokir. Silakan izinkan popup di pengaturan browser Anda.");
-        // Fallback: Tampilkan struk di dalam div di halaman saat ini
-        var struk = document.createElement("div");
-        struk.style.position = "fixed";
-        struk.style.top = "0";
-        struk.style.left = "0";
-        struk.style.width = "100%";
-        struk.style.height = "100%";
-        struk.style.background = "rgba(0,0,0,0.8)";
-        struk.style.color = "#fff";
-        struk.style.padding = "20px";
-        struk.style.zIndex = "1000";
-        struk.style.overflowY = "auto";
-
-        var lines = [];
-        lines.push("[NAMA TOKO ANDA]");
-        lines.push("Jl. Alamat Toko No. 123");
-        lines.push("--------------------------------");
-        cart.forEach(function(it){
-          lines.push("["+it.operator+"] "+it.nama);
-          lines.push("  "+it.qty+" x "+rupiah(it.harga)+"  =  "+rupiah(it.harga*it.qty));
-        });
-        lines.push("--------------------------------");
-        lines.push("TOTAL    : "+rupiah(totals.grand));
-        lines.push(new Date().toLocaleString("id-ID"));
-        lines.push("Terima kasih.");
-
-        struk.innerHTML = "<pre>" + lines.join("\n") + "</pre><button onclick='this.parentElement.remove()'>Tutup</button>";
-        document.body.appendChild(struk);
-        return;
-      }
-      var doc = win.document;
-
-      doc.open();
-      var html = doc.createElement("html");
-      var head = doc.createElement("head");
-      var meta = doc.createElement("meta"); meta.setAttribute("charset","utf-8"); head.appendChild(meta);
-      var style = doc.createElement("style");
-      style.textContent = "@page{size:58mm auto;margin:0} body{font-family:monospace;font-size:12px;margin:0} pre{margin:8px;white-space:pre-wrap}";
-      head.appendChild(style);
-      var body = doc.createElement("body");
-      var pre = doc.createElement("pre");
-
       var lines = [];
       lines.push("[NAMA TOKO ANDA]");
       lines.push("Jl. Alamat Toko No. 123");
@@ -298,19 +253,49 @@
       lines.push(new Date().toLocaleString("id-ID"));
       lines.push("Terima kasih.");
 
-      pre.textContent = lines.join("\n");
-      body.appendChild(pre);
-      html.appendChild(head); html.appendChild(body);
-      doc.write(html.outerHTML); doc.close();
+      var receiptText = lines.join("\n");
 
-      win.focus();
-      setTimeout(function() { // Tambahkan delay untuk memastikan jendela dimuat
-        win.print();
-        win.close();
-      }, 500);
+      if (navigator.share) {
+        navigator.share({
+          title: "Struk Pembelian",
+          text: receiptText
+        }).catch(function(e) {
+          console.error("Gagal membagikan struk:", e);
+          // Fallback: Tampilkan struk di dalam div di halaman saat ini
+          var struk = document.createElement("div");
+          struk.style.position = "fixed";
+          struk.style.top = "0";
+          struk.style.left = "0";
+          struk.style.width = "100%";
+          struk.style.height = "100%";
+          struk.style.background = "rgba(0,0,0,0.8)";
+          struk.style.color = "#fff";
+          struk.style.padding = "20px";
+          struk.style.zIndex = "1000";
+          struk.style.overflowY = "auto";
+          struk.innerHTML = "<pre>" + receiptText + "</pre><button onclick='this.parentElement.remove()'>Tutup</button>";
+          document.body.appendChild(struk);
+        });
+      } else {
+        // Fallback jika Web Share API tidak didukung
+        var struk = document.createElement("div");
+        struk.style.position = "fixed";
+        struk.style.top = "0";
+        struk.style.left = "0";
+        struk.style.width = "100%";
+        struk.style.height = "100%";
+        struk.style.background = "rgba(0,0,0,0.8)";
+        struk.style.color = "#fff";
+        struk.style.padding = "20px";
+        struk.style.zIndex = "1000";
+        struk.style.overflowY = "auto";
+        struk.innerHTML = "<pre>" + receiptText + "</pre><button onclick='this.parentElement.remove()'>Tutup</button>";
+        document.body.appendChild(struk);
+        alert("Fitur berbagi tidak didukung di browser ini. Struk ditampilkan di layar.");
+      }
     } catch(e) {
-      console.error("Error saat mencetak struk:", e);
-      alert("Gagal mencetak struk. Cek konsol untuk detail atau coba lagi.");
+      console.error("Error saat membagikan struk:", e);
+      alert("Gagal membagikan struk. Cek konsol untuk detail atau coba lagi.");
     }
   }
 
