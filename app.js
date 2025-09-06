@@ -247,7 +247,7 @@
       var maxLength = 32; // lebar struk
       cart.forEach(function(it) {
         var subtotal = rupiah(it.harga * it.qty);
-        var qtyLine = it.qty + " x " + rupiah(it.harga);
+        var qtyLine = it.qty + " x " + rupiah(it.harga) + "=";
       
         // Panjang kiri (qtyLine) dan kanan (subtotal)
         var leftPart = qtyLine;
@@ -285,18 +285,8 @@
       
       lines.push(leftPart + totalPadding + totalValue);
       lines.push(" ");
-      // lines.push(new Date().toLocaleString("id-ID"));
-      lines.push(new Date().toLocaleString("id-ID", {
-        day: "numeric",
-        month: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false
-      }));
+      lines.push(new Date().toLocaleString("id-ID"));
       lines.push("Terima kasih.");
-
 
       var receiptText = lines.join("\n");
 
