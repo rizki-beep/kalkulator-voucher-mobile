@@ -170,15 +170,19 @@
       .concat(items.map(function(d){ return { value:d.nama, label:(d.nama+" - "+rupiah(d.harga)) }; }));
     vSel.setOptions(options);
     vSel.setValue("", false);
-    document.getElementById("qty").value = 1;
+    document.getElementById("qty").value = ""; // Set to empty string
   }
 
   function addToCart() {
     var op = opSel.getValue();
     var nm = vSel.getValue();
-    var qty = parseInt(document.getElementById("qty").value, 10);
-    if (!op || !nm || !qty || qty <= 0) {
-      alert("Pilih operator, voucher, dan qty yang valid.");
+    var qtyInput = document.getElementById("qty").value;
+    var qty = parseInt(qtyInput, 10);
+    if (!qtyInput || isNaN(qty) || qty <= 0) {
+      qty = 1; // Default to 1 if input is empty or invalid
+    }
+    if (!op || !nm) {
+      alert("Pilih operator dan voucher yang valid.");
       return;
     }
     var v = data.find(function(x){ return x.operator === op && x.nama === nm; });
@@ -189,6 +193,7 @@
     else cart.push({ operator: op, nama: nm, harga: v.harga, qty: qty });
 
     renderCart();
+    document.getElementById("qty").value = ""; // Clear input after adding
   }
 
   function calcTotals() {
@@ -208,7 +213,13 @@
         "<td>"+it.operator+"</td>"+
         "<td>"+it.nama+"</td>"+
         '<td class="right">'+rupiah(it.harga)+'</td>'+
-        '<td class="right"><input type="number" min="1" value="'+it.qty+'" data-idx="'+idx+'" class="qty-input"></td>'+
+        '<td class="right">'+
+          '<div class="qty-control">'+
+            '<button data-idx="'+idx+'" class="qty-btn qty-minus">-</button>'+
+            '<input type="number" min="1" value="'+it.qty+'" data-idx="'+idx+'" class="qty-input">'+
+            '<button data-idx="'+idx+'" class="qty-btn qty-plus">+</button>'+
+          '</div>'+
+        '</td>'+
         '<td class="right">'+rupiah(sub)+'</td>'+
         '<td><button data-idx="'+idx+'" class="btn btn-ghost">Hapus</button></td>';
       tbody.appendChild(tr);
@@ -217,11 +228,32 @@
     Array.from(tbody.querySelectorAll(".qty-input")).forEach(function(inp){
       inp.addEventListener("change", function(e){
         var i = parseInt(e.target.getAttribute("data-idx"), 10);
-        var val = Math.max(1, parseInt(e.target.value, 10) || 1);
+        var val = parseInt(e.target.value, 10);
+        if (isNaN(val) || val <= 0) {
+          val = 1; // Default to 1 if input is empty or invalid
+          e.target.value = val;
+        }
         cart[i].qty = val;
         renderCart();
       });
     });
+
+    Array.from(tbody.querySelectorAll(".qty-minus")).forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        var i = parseInt(e.target.getAttribute("data-idx"), 10);
+        cart[i].qty = Math.max(1, cart[i].qty - 1);
+        renderCart();
+      });
+    });
+
+    Array.from(tbody.querySelectorAll(".qty-plus")).forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        var i = parseInt(e.target.getAttribute("data-idx"), 10);
+        cart[i].qty += 1;
+        renderCart();
+      });
+    });
+
     Array.from(tbody.querySelectorAll(".btn.btn-ghost")).forEach(function(btn){
       btn.addEventListener("click", function(e){
         var i = parseInt(e.target.getAttribute("data-idx"), 10);
@@ -338,11 +370,11 @@
   document.addEventListener("DOMContentLoaded", function(){
     opSel = createSelect(document.getElementById("opSelect"), {
       placeholder: "--Pilih--",
-      onChange: function(){ buildVoucher(); document.getElementById("qty").value = 1; }
+      onChange: function(){ buildVoucher(); }
     });
     vSel = createSelect(document.getElementById("voucherSelect"), {
       placeholder: "--Pilih--",
-      onChange: function(){ document.getElementById("qty").value = 1; }
+      onChange: function(){ document.getElementById("qty").value = ""; }
     });
 
     load().catch(function(e){
