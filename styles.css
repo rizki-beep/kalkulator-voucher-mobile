@@ -453,3 +453,16 @@ pre{ white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255
 :root[data-theme="light"] .theme-toggle{
   background: linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.02));
 }
+
+/* === FIX: qty clipping saat HP landscape === */
+/* Pakai metrik seperti portrait, tapi fleksibel (tanpa height fixed) */
+@media (orientation: landscape) {
+  .qty-input {
+    font-size: 14px;         /* konsisten dengan portrait */
+    line-height: 1.2;        /* cegah glyph terklip */
+    padding: 6px 8px;        /* beri ruang vertikal cukup */
+    height: auto;            /* jangan paksa tinggi tetap */
+    min-height: 32px;        /* tetap minimal nyaman */
+    -webkit-text-fill-color: var(--text); /* jaga kontras di WebKit */
+  }
+}
