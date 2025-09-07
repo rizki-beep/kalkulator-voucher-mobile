@@ -41,8 +41,12 @@
       state.open = true;
       rootEl.classList.add("open");
       btn.setAttribute("aria-expanded","true");
-      state.hoverIndex = Math.max(0, state.options.findIndex(function(o){ return o.value === state.value; }));
+      // start dari atas bila diminta; jika tidak, fokus ke item terpilih
+      var foundIdx = state.options.findIndex(function(o){ return o.value === state.value; });
+      state.hoverIndex = (opts && opts.openFromTop) ? 0 : Math.max(0, foundIdx);
       renderOptions();
+      // pastikan scroll selalu dari paling atas saat dibuka
+      list.scrollTop = 0;
       list.focus({ preventScroll:true });
       document.addEventListener("click", onDocClick, { capture:true, once:true });
     }
@@ -59,7 +63,10 @@
         state.value = "";
         glabel.textContent = placeholder;
       }
-      if (state.open) renderOptions();
+      if (state.open) {
+        renderOptions();
+        list.scrollTop = 0; // reset posisi scroll jika sedang terbuka
+      }
     }
 
     function setValue(val, emit){
@@ -429,7 +436,8 @@
     });
     vSel = createSelect(document.getElementById("voucherSelect"), {
       placeholder: "--Pilih--",
-      onChange: function(){ document.getElementById("qty").value = ""; }
+      onChange: function(){ document.getElementById("qty").value = ""; },
+      openFromTop: true // selalu mulai dari daftar teratas saat dibuka
     });
 
     load().catch(function(e){
