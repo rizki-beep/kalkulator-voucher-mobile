@@ -45,7 +45,6 @@
       renderOptions();
       list.focus({ preventScroll:true });
       document.addEventListener("click", onDocClick, { capture:true, once:true });
-      document.addEventListener("touchstart", onDocClick, { capture:true, once:true });
     }
     function close(){
       state.open = false;
@@ -93,8 +92,8 @@
       }
     });
 
+    // Pakai click saja (hapus touchstart untuk hindari double-trigger)
     btn.addEventListener("click", toggle);
-    btn.addEventListener("touchstart", function(e){ e.preventDefault(); toggle(); });
 
     return { setOptions:setOptions, setValue:setValue, getValue:getValue, open:open, close:close };
   }
@@ -203,68 +202,110 @@
     return { grand: grand };
   }
 
+  // ===== PATCHED: renderCart aman (tanpa innerHTML) + click only =====
   function renderCart() {
     var tbody = document.querySelector("#cart tbody");
     tbody.innerHTML = "";
+
     cart.forEach(function(it, idx){
-      var sub = it.harga * it.qty;
       var tr = document.createElement("tr");
-      tr.innerHTML =
-        "<td>"+it.operator+"</td>"+
-        "<td>"+it.nama+"</td>"+
-        '<td class="right">'+rupiah(it.harga)+'</td>'+
-        '<td class="right">'+
-          '<div class="qty-control">'+
-            '<button data-idx="'+idx+'" class="qty-btn qty-minus">-</button>'+
-            '<input type="number" min="1" value="'+it.qty+'" data-idx="'+idx+'" class="qty-input">'+
-            '<button data-idx="'+idx+'" class="qty-btn qty-plus">+</button>'+
-          '</div>'+
-        '</td>'+
-        '<td class="right">'+rupiah(sub)+'</td>'+
-        '<td><button data-idx="'+idx+'" class="btn btn-ghost">Hapus</button></td>';
+
+      var tdOp = document.createElement("td");
+      tdOp.textContent = it.operator;
+      tr.appendChild(tdOp);
+
+      var tdNama = document.createElement("td");
+      tdNama.textContent = it.nama;
+      tr.appendChild(tdNama);
+
+      var tdHarga = document.createElement("td");
+      tdHarga.className = "right";
+      tdHarga.textContent = rupiah(it.harga);
+      tr.appendChild(tdHarga);
+
+      var tdQty = document.createElement("td");
+      tdQty.className = "right";
+      var wrap = document.createElement("div");
+      wrap.className = "qty-control";
+
+      var btnMin = document.createElement("button");
+      btnMin.type = "button";
+      btnMin.className = "qty-btn qty-minus";
+      btnMin.dataset.idx = String(idx);
+      btnMin.textContent = "-";
+
+      var inp = document.createElement("input");
+      inp.type = "number";
+      inp.min = "1";
+      inp.value = String(it.qty);
+      inp.className = "qty-input";
+      inp.dataset.idx = String(idx);
+
+      var btnPlus = document.createElement("button");
+      btnPlus.type = "button";
+      btnPlus.className = "qty-btn qty-plus";
+      btnPlus.dataset.idx = String(idx);
+      btnPlus.textContent = "+";
+
+      wrap.appendChild(btnMin);
+      wrap.appendChild(inp);
+      wrap.appendChild(btnPlus);
+      tdQty.appendChild(wrap);
+      tr.appendChild(tdQty);
+
+      var tdSub = document.createElement("td");
+      tdSub.className = "right";
+      tdSub.textContent = rupiah(it.harga * it.qty);
+      tr.appendChild(tdSub);
+
+      var tdDel = document.createElement("td");
+      var btnDel = document.createElement("button");
+      btnDel.type = "button";
+      btnDel.className = "btn btn-ghost";
+      btnDel.dataset.idx = String(idx);
+      btnDel.textContent = "Hapus";
+      tdDel.appendChild(btnDel);
+      tr.appendChild(tdDel);
+
       tbody.appendChild(tr);
     });
 
-    Array.from(tbody.querySelectorAll(".qty-input")).forEach(function(inp){
-      inp.addEventListener("change", function(e){
-        var i = parseInt(e.target.getAttribute("data-idx"), 10);
-        var val = parseInt(e.target.value, 10);
-        if (isNaN(val) || val <= 0) {
-          val = 1; // Default to 1 if input is empty or invalid
-          e.target.value = val;
-        }
-        cart[i].qty = val;
-        renderCart();
-      });
-    });
+    // Event delegation: gunakan click saja
+    tbody.onclick = function(e){
+      var t = e.target;
+      if (!(t instanceof Element)) return;
+      var iStr = t.getAttribute("data-idx");
+      if (!iStr) return;
+      var i = parseInt(iStr, 10);
+      if (isNaN(i) || i < 0 || i >= cart.length) return;
 
-    Array.from(tbody.querySelectorAll(".qty-minus")).forEach(function(btn){
-      btn.addEventListener("click", function(e){
-        var i = parseInt(e.target.getAttribute("data-idx"), 10);
-        cart[i].qty = Math.max(1, cart[i].qty - 1);
+      if (t.classList.contains("qty-minus")) {
+        cart[i].qty = Math.max(1, (cart[i].qty || 1) - 1);
         renderCart();
-      });
-    });
-
-    Array.from(tbody.querySelectorAll(".qty-plus")).forEach(function(btn){
-      btn.addEventListener("click", function(e){
-        var i = parseInt(e.target.getAttribute("data-idx"), 10);
-        cart[i].qty += 1;
+      } else if (t.classList.contains("qty-plus")) {
+        cart[i].qty = (cart[i].qty || 0) + 1;
         renderCart();
-      });
-    });
-
-    Array.from(tbody.querySelectorAll(".btn.btn-ghost")).forEach(function(btn){
-      btn.addEventListener("click", function(e){
-        var i = parseInt(e.target.getAttribute("data-idx"), 10);
+      } else if (t.classList.contains("btn-ghost")) {
         cart.splice(i, 1);
         renderCart();
-      });
-    });
+      }
+    };
+
+    tbody.onchange = function(e){
+      var t = e.target;
+      if (!(t instanceof HTMLInputElement)) return;
+      if (!t.classList.contains("qty-input")) return;
+      var i = parseInt(t.getAttribute("data-idx") || "-1", 10);
+      var val = parseInt(t.value, 10);
+      if (isNaN(val) || val <= 0) val = 1;
+      cart[i].qty = val;
+      renderCart();
+    };
 
     calcTotals();
   }
 
+  // ===== PATCHED: printReceipt aman (tanpa innerHTML) + click only =====
   function printReceipt() {
     var totals = calcTotals();
     if (cart.length === 0) {
@@ -274,48 +315,39 @@
     try {
       var lines = [];
       lines.push("STRUK PEMBELIAN VOUCHER");
-      // lines.push("Jl. Pahlawan Unit");
       lines.push("--------------------------------");
-      var maxLength = 32; // lebar struk
+      var maxLength = 32;
+
       cart.forEach(function(it) {
         var subtotal = rupiah(it.harga * it.qty);
-        var qtyLine = it.qty + " x " + rupiah(it.harga);
-      
-        // Panjang kiri (qtyLine) dan kanan (subtotal)
-        var leftPart = qtyLine;
+        var leftPart = it.qty + " x " + rupiah(it.harga);
         var rightPart = subtotal;
-      
-        // Hitung panjang padding
+
         var totalLength = leftPart.length + rightPart.length;
         var paddingLength = maxLength - totalLength;
-      
-        // Pastikan padding tidak negatif
+
         if (paddingLength < 0) {
-          // Jika total panjang melebihi maxLength, potong leftPart atau rightPart
           var excess = totalLength - maxLength;
           if (leftPart.length > rightPart.length) {
-            leftPart = leftPart.substring(0, leftPart.length - excess - 1); // Kurangi leftPart
+            leftPart = leftPart.substring(0, Math.max(0, leftPart.length - excess - 1));
           } else {
-            rightPart = rightPart.substring(0, rightPart.length - excess - 1); // Kurangi rightPart
+            rightPart = rightPart.substring(0, Math.max(0, rightPart.length - excess - 1));
           }
-          paddingLength = maxLength - (leftPart.length + rightPart.length); // Hitung ulang padding
+          totalLength = leftPart.length + rightPart.length;
+          paddingLength = Math.max(0, maxLength - totalLength);
         }
-      
+
         var padding = " ".repeat(paddingLength);
-      
+
         lines.push("[" + it.operator + "] " + it.nama);
         lines.push(leftPart + "  =" + padding + rightPart);
       });
+
       lines.push("--------------------------------");
-      // TOTAL baris
       var totalLabel = "TOTAL =";
       var totalValue = rupiah(totals.grand);
-      
-      // panjang kiri (label + spasi)
-      var leftPart = totalLabel;
-      var totalPadding = " ".repeat(maxLength - leftPart.length - totalValue.length);
-      
-      lines.push(leftPart + totalPadding + totalValue);
+      var totalPadding = " ".repeat(Math.max(0, maxLength - totalLabel.length - totalValue.length));
+      lines.push(totalLabel + totalPadding + totalValue);
       lines.push(" ");
       lines.push(new Date().toLocaleString("id-ID"));
       lines.push("Terima kasih.");
@@ -323,46 +355,69 @@
       var receiptText = lines.join("\n");
 
       if (navigator.share) {
-        navigator.share({
-          title: "Struk Pembelian",
-          text: receiptText
-        }).catch(function(e) {
-          console.error("Gagal membagikan struk:", e);
-          // Fallback: Tampilkan struk di dalam div di halaman saat ini
-          var struk = document.createElement("div");
-          struk.style.position = "fixed";
-          struk.style.top = "0";
-          struk.style.left = "0";
-          struk.style.width = "100%";
-          struk.style.height = "100%";
-          struk.style.background = "rgba(0,0,0,0.8)";
-          struk.style.color = "#fff";
-          struk.style.padding = "20px";
-          struk.style.zIndex = "1000";
-          struk.style.overflowY = "auto";
-          struk.innerHTML = "<pre>" + receiptText + "</pre><button onclick='this.parentElement.remove()'>Tutup</button>";
-          document.body.appendChild(struk);
-        });
+        navigator.share({ title: "Struk Pembelian", text: receiptText })
+          .catch(function(e) {
+            console.error("Gagal membagikan struk:", e);
+            showReceiptOverlay(receiptText);
+          });
       } else {
-        // Fallback jika Web Share API tidak didukung
-        var struk = document.createElement("div");
-        struk.style.position = "fixed";
-        struk.style.top = "0";
-        struk.style.left = "0";
-        struk.style.width = "100%";
-        struk.style.height = "100%";
-        struk.style.background = "rgba(0,0,0,0.8)";
-        struk.style.color = "#fff";
-        struk.style.padding = "20px";
-        struk.style.zIndex = "1000";
-        struk.style.overflowY = "auto";
-        struk.innerHTML = "<pre>" + receiptText + "</pre><button onclick='this.parentElement.remove()'>Tutup</button>";
-        document.body.appendChild(struk);
+        showReceiptOverlay(receiptText);
         alert("Fitur berbagi tidak didukung di browser ini. Struk ditampilkan di layar.");
       }
     } catch(e) {
       console.error("Error saat membagikan struk:", e);
       alert("Gagal membagikan struk. Cek konsol untuk detail atau coba lagi.");
+    }
+
+    function showReceiptOverlay(text) {
+      var overlay = document.createElement("div");
+      Object.assign(overlay.style, {
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100%",
+        height: "100%",
+        background: "rgba(0,0,0,0.8)",
+        color: "#fff",
+        padding: "20px",
+        zIndex: "1000",
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px"
+      });
+
+      var pre = document.createElement("pre");
+      pre.style.margin = "0";
+      pre.style.whiteSpace = "pre-wrap";
+      pre.textContent = text; // aman dari XSS
+
+      var controls = document.createElement("div");
+      controls.style.display = "flex";
+      controls.style.gap = "8px";
+
+      var closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.textContent = "Tutup";
+      closeBtn.addEventListener("click", function(){ overlay.remove(); });
+
+      var copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.textContent = "Salin";
+      copyBtn.addEventListener("click", function(){
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function(){
+            copyBtn.textContent = "Disalin!";
+            setTimeout(function(){ copyBtn.textContent = "Salin"; }, 1500);
+          }).catch(function(){ /* abaikan */ });
+        }
+      });
+
+      controls.appendChild(closeBtn);
+      controls.appendChild(copyBtn);
+      overlay.appendChild(pre);
+      overlay.appendChild(controls);
+      document.body.appendChild(overlay);
     }
   }
 
@@ -390,15 +445,46 @@
 
     if (btnAdd) btnAdd.addEventListener("click", addToCart);
     if (btnReload) btnReload.addEventListener("click", load);
-    if (btnReset) btnReset.addEventListener("click", function(){ 
-      cart = []; 
-      renderCart(); 
-      console.log("Keranjang direset"); 
+    if (btnReset) btnReset.addEventListener("click", function(){
+      cart = [];
+      renderCart();
+      console.log("Keranjang direset");
     });
     if (btnPrint) btnPrint.addEventListener("click", printReceipt);
     if (btnToggleDbg) btnToggleDbg.addEventListener("click", function(){
       var p = document.getElementById("dbg");
       p.style.display = (p.style.display === "none" || !p.style.display) ? "block" : "none";
     });
+
+    /* ===== THEME TOGGLE ===== */
+    var tbtn = document.getElementById("themeToggle");
+    if (tbtn){
+      var key = "theme";
+      function applyTheme(theme){
+        document.documentElement.setAttribute("data-theme", theme);
+        try { localStorage.setItem(key, theme); } catch(_) {}
+        // ikon & aksesibilitas
+        tbtn.textContent = (theme === "dark") ? "🌙" : "☀️";
+        tbtn.title = (theme === "dark") ? "Switch to light mode" : "Switch to dark mode";
+        tbtn.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+        // update meta theme-color untuk status bar mobile
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (!meta){
+          meta = document.createElement("meta");
+          meta.setAttribute("name","theme-color");
+          document.head.appendChild(meta);
+        }
+        var bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+        meta.setAttribute("content", bg || (theme === "dark" ? "#0b0f14" : "#ffffff"));
+      }
+      // tema awal dari attribute yang sudah diset di <head>
+      var current = document.documentElement.getAttribute("data-theme") || "dark";
+      applyTheme(current);
+      // toggle klik
+      tbtn.addEventListener("click", function(){
+        var next = (document.documentElement.getAttribute("data-theme") === "dark") ? "light" : "dark";
+        applyTheme(next);
+      });
+    }
   });
 })();
