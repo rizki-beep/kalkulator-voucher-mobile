@@ -454,38 +454,9 @@ pre{ white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255
   background: linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.02));
 }
 
-/* === FIX: Qty terpotong saat HP landscape === */
+/* Optional: bila masih sempit */
 @media (orientation: landscape) {
-  /* Pastikan kolom Qty cukup lebar untuk - [input] + */
-  table td:nth-child(4),
-  table th:nth-child(4) {
-    min-width: 150px;   /* sama seperti portrait */
-    width: 150px;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-
-  /* Jangan biarkan anak flex mengecil; jaga semuanya tetap muat */
-  .qty-control {
-    flex-wrap: nowrap;
-    justify-content: center;
-    gap: 6px;
-  }
-  .qty-btn {
-    flex: 0 0 36px;     /* tombol fix 36px */
-    width: 36px;
-    height: 32px;
-    font-size: 16px;
-  }
-  .qty-input {
-    flex: 0 0 auto;     /* jangan shrink */
-    width: clamp(56px, 8ch, 80px);  /* cukup untuk 2–3 digit */
-    min-width: 6ch;     /* selalu minimal muat “100” */
-    font-size: 14px;
-    line-height: 1.2;
-    padding: 6px 6px;
-    text-align: center;
-    -webkit-text-fill-color: var(--text);
-  }
+  table td:nth-child(4), table th:nth-child(4) { min-width: 160px; width: 160px; }
+  .qty-input { width: clamp(60px, 9ch, 84px); min-width: 7ch; }
 }
 
