@@ -340,7 +340,7 @@
         var padding = " ".repeat(paddingLength);
 
         lines.push("[" + it.operator + "] " + it.nama);
-        lines.push(leftPart + "  =" + padding + rightPart);
+        lines.push(leftPart + padding + rightPart);
       });
 
       lines.push("--------------------------------");
