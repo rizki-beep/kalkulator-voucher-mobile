@@ -250,7 +250,7 @@ tbody tr:last-child td { border-bottom: none; }
 tbody tr:nth-child(even){ background: rgba(255,255,255,0.03); }
 
 /* Numeric alignment */
-.right{ text-align: right; }
+.right{ text-align: center; }
 
 /* Qty control */
 .qty-input{
