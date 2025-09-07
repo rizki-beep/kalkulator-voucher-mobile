@@ -3,7 +3,7 @@
 
   // ====== Select kustom util ======
   function createSelect(rootEl, opts){
-    var state = { open:false, value:"", options:[], hoverIndex:-1 };
+    var state = { open:false, value:"", options:[], hoverIndex:-1, resetOnOpen:false };
     var placeholder = (opts && opts.placeholder) || "--Pilih--";
     var onChange = (opts && opts.onChange) || function(){};
 
@@ -37,16 +37,36 @@
       });
     }
 
+    // update highlight/selected tanpa render ulang
+    function updateHighlight(){
+      var children = list.children;
+      for (var i = 0; i < children.length; i++){
+        if (i === state.hoverIndex) children[i].setAttribute("aria-current","true");
+        else children[i].removeAttribute("aria-current");
+        // sinkron aria-selected
+        var opt = state.options[i];
+        if (opt && opt.value === state.value) children[i].setAttribute("aria-selected","true");
+        else children[i].removeAttribute("aria-selected");
+      }
+    }
+
     function open(){
       state.open = true;
       rootEl.classList.add("open");
       btn.setAttribute("aria-expanded","true");
-      // start dari atas bila diminta; jika tidak, fokus ke item terpilih
+
       var foundIdx = state.options.findIndex(function(o){ return o.value === state.value; });
-      state.hoverIndex = (opts && opts.openFromTop) ? 0 : Math.max(0, foundIdx);
-      renderOptions();
-      // pastikan scroll selalu dari paling atas saat dibuka
-      list.scrollTop = 0;
+      state.hoverIndex = state.resetOnOpen ? 0 : Math.max(0, foundIdx);
+
+      // Jangan render ulang saat open KECUALI jika resetOnOpen diminta
+      if (state.resetOnOpen){
+        renderOptions();
+        list.scrollTop = 0;          // mulai dari atas saat data berubah
+        state.resetOnOpen = false;   // konsumsi flag
+      } else {
+        updateHighlight();           // hanya update highlight agar ringan
+      }
+
       list.focus({ preventScroll:true });
       document.addEventListener("click", onDocClick, { capture:true, once:true });
     }
@@ -57,22 +77,23 @@
     }
     function toggle(){ state.open ? close() : open(); }
 
-    function setOptions(options){
+    // Tambah argumen opsional meta: { resetOnOpen: true } → dipakai saat data berubah
+    function setOptions(options, meta){
       state.options = options.slice();
       if (!state.options.some(function(o){ return o.value === state.value; })){
         state.value = "";
         glabel.textContent = placeholder;
       }
-      if (state.open) {
-        renderOptions();
-        list.scrollTop = 0; // reset posisi scroll jika sedang terbuka
-      }
+      // Selalu render saat data di-set (meski dropdown tertutup) agar DOM siap
+      renderOptions();
+      if (meta && meta.resetOnOpen) state.resetOnOpen = true;
     }
 
     function setValue(val, emit){
       state.value = val;
       var found = state.options.find(function(o){ return o.value === val; });
       glabel.textContent = found ? found.label : placeholder;
+      updateHighlight(); // sinkron aria-selected bila daftar sudah ada
       if (emit) onChange(val);
     }
 
@@ -99,7 +120,7 @@
       }
     });
 
-    // Pakai click saja (hapus touchstart untuk hindari double-trigger)
+    // Pakai click saja (hindari double-trigger)
     btn.addEventListener("click", toggle);
 
     return { setOptions:setOptions, setValue:setValue, getValue:getValue, open:open, close:close };
@@ -165,6 +186,7 @@
   function buildOperator(ops) {
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(ops.map(function(o){ return { value:o, label:o }; }));
+    // Operator: render sekali saat setOptions (open tidak merender ulang)
     opSel.setOptions(options);
     opSel.setValue("", false);
   }
@@ -174,7 +196,9 @@
     var items = data.filter(function(d){ return d.operator === op; });
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(items.map(function(d){ return { value:d.nama, label:(d.nama+" - "+rupiah(d.harga)) }; }));
-    vSel.setOptions(options);
+    // Voucher: render ulang HANYA saat operator berubah,
+    // minta reset scroll ke atas pada open berikutnya
+    vSel.setOptions(options, { resetOnOpen: true });
     vSel.setValue("", false);
     document.getElementById("qty").value = ""; // Set to empty string
   }
@@ -430,14 +454,15 @@
 
   // ===== Init =====
   document.addEventListener("DOMContentLoaded", function(){
+    // Operator: tidak render ulang saat open
     opSel = createSelect(document.getElementById("opSelect"), {
       placeholder: "--Pilih--",
       onChange: function(){ buildVoucher(); }
     });
+    // Voucher: render ulang hanya saat operator berganti (setOptions dengan resetOnOpen)
     vSel = createSelect(document.getElementById("voucherSelect"), {
       placeholder: "--Pilih--",
-      onChange: function(){ document.getElementById("qty").value = ""; },
-      openFromTop: true // selalu mulai dari daftar teratas saat dibuka
+      onChange: function(){ document.getElementById("qty").value = ""; }
     });
 
     load().catch(function(e){
