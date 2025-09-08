@@ -159,7 +159,38 @@
   var data = [];
   var cart = [];
 
-  var opSel, vSel;
+  // ===== Ranking untuk pengurutan keranjang (baru) =====
+  var opSel, vSel, opRank = new Map(), voucherRank = new Map();
+  function rankKey(op, nm){ return String(op) + "\x1F" + String(nm); }
+  function rebuildVoucherRank(arr){
+    voucherRank = new Map();
+    var seenPerOp = new Map();
+    arr.forEach(function(x){
+      var c = seenPerOp.get(x.operator) || 0;
+      var k = rankKey(x.operator, x.nama);
+      if (!voucherRank.has(k)){
+        voucherRank.set(k, c);
+        seenPerOp.set(x.operator, c+1);
+      }
+    });
+  }
+  function rankOperator(op){
+    var idx = opRank.get(op);
+    return (idx == null) ? 9999 : idx;
+  }
+  function rankVoucher(op, nm){
+    var idx = voucherRank.get(rankKey(op, nm));
+    return (idx == null) ? 9999 : idx;
+  }
+  function sortCart(){
+    cart.sort(function(a,b){
+      var byOp = rankOperator(a.operator) - rankOperator(b.operator);
+      if (byOp !== 0) return byOp;
+      var byVoucher = rankVoucher(a.operator, a.nama) - rankVoucher(b.operator, b.nama);
+      if (byVoucher !== 0) return byVoucher;
+      return 0;
+    });
+  }
 
   function rupiah(n){ return isNaN(n) ? "0" : Number(n).toLocaleString("id-ID"); }
   function setText(id, txt){ var el = document.getElementById(id); if (el) el.textContent = txt; }
@@ -181,12 +212,14 @@
     var cached = !force ? loadCatalogFromCache() : null;
     if (cached && Array.isArray(cached.data) && cached.data.length){
       data = cached.data;
+      rebuildVoucherRank(data); // bangun ranking voucher dari urutan data (sheet)
       setText("dbg_count", String(data.length));
       var opsCached = Array.from(new Set(data.map(function(d){ return d.operator; }))).sort();
       setText("dbg_ops", opsCached.join(", ") || "-");
       setText("dbg_sample", JSON.stringify(data.slice(0,3), null, 2));
       buildOperator(opsCached);
       buildVoucher();
+      if (cart.length){ sortCart(); renderCart(); } // rapikan bila cart sudah berisi
     }
 
     // 2) Selalu fetch jaringan (revalidate / force)
@@ -220,7 +253,10 @@
       // 3) Simpan ke cache SELALU
       saveCatalogToCache(freshData);
 
-      // 4) Render decide
+      // 4) Ranking voucher dari data baru
+      rebuildVoucherRank(freshData);
+
+      // 5) Render decide
       var hadCache = !!(cached && Array.isArray(cached.data) && cached.data.length);
       var cacheWasFresh = !!(cached && isFresh(cached.ts));
       data = freshData;
@@ -232,7 +268,8 @@
         buildOperator(ops);
         buildVoucher();
       }
-      // jika hadCache & fresh & bukan force → biarkan UI, data baru sudah siap dipakai
+      // Setelah data/ranking update, rapikan keranjang jika sudah berisi
+      if (cart.length){ sortCart(); renderCart(); }
 
     } catch(e) {
       if (!(cached && cached.data && cached.data.length)){
@@ -246,6 +283,8 @@
   function buildOperator(ops) {
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(ops.map(function(o){ return { value:o, label:o }; }));
+    // urutan operator untuk pengelompokan cart mengikuti dropdown (ops sudah .sort())
+    opRank = new Map(ops.map(function(o,i){ return [o, i]; }));
     opSel.setOptions(options);
     opSel.setValue("", false);
   }
@@ -253,6 +292,7 @@
   function buildVoucher() {
     var op = opSel.getValue();
     var items = data.filter(function(d){ return d.operator === op; });
+    // items mempertahankan urutan seperti pada "data" (sheet)
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(items.map(function(d){ return { value:d.nama, label:(d.nama+" - "+rupiah(d.harga)) }; }));
     vSel.setOptions(options, { resetOnOpen: true });
@@ -274,6 +314,8 @@
     if (exist) exist.qty += qty;
     else cart.push({ operator: op, nama: nm, harga: v.harga, qty: qty });
 
+    // jaga urutan cart sesuai ranking
+    sortCart();
     renderCart();
     document.getElementById("qty").value = "";
   }
@@ -533,7 +575,7 @@
         btnReload.setAttribute("aria-busy", on ? "true" : "false");
         btnReload.title = on ? "Memuat data…" : "Reload data";
 
-        // Izinkan animasi sementara, agar tetap berputar walau prefers-reduced-motion: reduce
+        // Izinkan animasi sementara
         if (on) {
           document.documentElement.setAttribute("data-allow-motion", "true");
         } else {
@@ -542,16 +584,15 @@
       }
 
       btnReload.addEventListener("click", async function(){
-        if (btnReload.disabled) return;   // cegah double click
+        if (btnReload.disabled) return;
         setReloadLoading(true);
         try {
-          await load(true);               // bypass TTL, simpan cache, rerender
+          await load(true); // bypass TTL, simpan cache, rerender
         } finally {
           setReloadLoading(false);
         }
       });
     }
-
 
     if (btnReset) btnReset.addEventListener("click", function(){
       cart = [];
