@@ -43,7 +43,6 @@
       for (var i = 0; i < children.length; i++){
         if (i === state.hoverIndex) children[i].setAttribute("aria-current","true");
         else children[i].removeAttribute("aria-current");
-        // sinkron aria-selected
         var opt = state.options[i];
         if (opt && opt.value === state.value) children[i].setAttribute("aria-selected","true");
         else children[i].removeAttribute("aria-selected");
@@ -58,13 +57,12 @@
       var foundIdx = state.options.findIndex(function(o){ return o.value === state.value; });
       state.hoverIndex = state.resetOnOpen ? 0 : Math.max(0, foundIdx);
 
-      // Jangan render ulang saat open KECUALI jika resetOnOpen diminta
       if (state.resetOnOpen){
         renderOptions();
-        list.scrollTop = 0;          // mulai dari atas saat data berubah
-        state.resetOnOpen = false;   // konsumsi flag
+        list.scrollTop = 0;
+        state.resetOnOpen = false;
       } else {
-        updateHighlight();           // hanya update highlight agar ringan
+        updateHighlight();
       }
 
       list.focus({ preventScroll:true });
@@ -77,14 +75,12 @@
     }
     function toggle(){ state.open ? close() : open(); }
 
-    // Tambah argumen opsional meta: { resetOnOpen: true } → dipakai saat data berubah
     function setOptions(options, meta){
       state.options = options.slice();
       if (!state.options.some(function(o){ return o.value === state.value; })){
         state.value = "";
         glabel.textContent = placeholder;
       }
-      // Selalu render saat data di-set (meski dropdown tertutup) agar DOM siap
       renderOptions();
       if (meta && meta.resetOnOpen) state.resetOnOpen = true;
     }
@@ -93,7 +89,7 @@
       state.value = val;
       var found = state.options.find(function(o){ return o.value === val; });
       glabel.textContent = found ? found.label : placeholder;
-      updateHighlight(); // sinkron aria-selected bila daftar sudah ada
+      updateHighlight();
       if (emit) onChange(val);
     }
 
@@ -120,7 +116,6 @@
       }
     });
 
-    // Pakai click saja (hindari double-trigger)
     btn.addEventListener("click", toggle);
 
     return { setOptions:setOptions, setValue:setValue, getValue:getValue, open:open, close:close };
@@ -128,6 +123,39 @@
 
   // ====== App logic ======
   var API_URL = "https://script.google.com/macros/s/AKfycbzUkNj1mQAoKp2sKVR8I4UXXAvUqQNJu3F2zDvni9AJUJq9IK_Z5aRDu2DBG7BqPNmmPQ/exec";
+
+  // ====== Frontend Cache (TTL 30 menit) ======
+  var CATALOG_CACHE_KEY = "catalog_v1";
+  var CATALOG_TTL_MS    = 30 * 60 * 1000; // 30 menit
+  var MAX_CACHE_BYTES   = 200 * 1024;     // guard 200KB
+
+  function hashString(str){
+    var h = 5381;
+    for (var i=0; i<str.length; i++){ h = ((h<<5)+h) ^ str.charCodeAt(i); }
+    return (h>>>0).toString(36);
+  }
+  function computeHash(arr){
+    try { return hashString(JSON.stringify(arr)); } catch(_) { return ""; }
+  }
+  function saveCatalogToCache(arr){
+    try {
+      var payload = { ts: Date.now(), data: arr, hash: computeHash(arr) };
+      var json = JSON.stringify(payload);
+      if (json.length > MAX_CACHE_BYTES) return; // terlalu besar → jangan cache
+      localStorage.setItem(CATALOG_CACHE_KEY, json);
+    } catch(_) { /* quota penuh → abaikan */ }
+  }
+  function loadCatalogFromCache(){
+    try {
+      var raw = localStorage.getItem(CATALOG_CACHE_KEY);
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      if (!obj || !obj.data) return null;
+      return obj;
+    } catch(_) { return null; }
+  }
+  function isFresh(ts){ return (Date.now() - (ts||0)) <= CATALOG_TTL_MS; }
+
   var data = [];
   var cart = [];
 
@@ -136,22 +164,36 @@
   function rupiah(n){ return isNaN(n) ? "0" : Number(n).toLocaleString("id-ID"); }
   function setText(id, txt){ var el = document.getElementById(id); if (el) el.textContent = txt; }
 
-  async function load() {
+  // === load(force): jika force=true → bypass cache utk render awal + simpan cache baru ===
+  async function load(force) {
     var err = document.getElementById("err");
     err.style.display = "none";
 
     setText("dbg_url", API_URL);
-    setText("dbg_status", "-");
+    setText("dbg_status", force ? "Reload paksa…" : "-");
     setText("dbg_ct", "-");
     setText("dbg_count", "0");
     setText("dbg_ops", "-");
     setText("dbg_sample", "");
     setText("dbg_raw", "");
 
+    // 1) Cache-first kecuali force
+    var cached = !force ? loadCatalogFromCache() : null;
+    if (cached && Array.isArray(cached.data) && cached.data.length){
+      data = cached.data;
+      setText("dbg_count", String(data.length));
+      var opsCached = Array.from(new Set(data.map(function(d){ return d.operator; }))).sort();
+      setText("dbg_ops", opsCached.join(", ") || "-");
+      setText("dbg_sample", JSON.stringify(data.slice(0,3), null, 2));
+      buildOperator(opsCached);
+      buildVoucher();
+    }
+
+    // 2) Selalu fetch jaringan (revalidate / force)
     try {
-      var url = API_URL + (API_URL.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
-      var res = await fetch(url, { cache: "no-store" });
-      setText("dbg_status", "HTTP " + res.status);
+      var url = API_URL + (API_URL.indexOf("?") >= 0 ? "&" : "?") + (force ? "_force=" : "_=") + Date.now();
+      var res = await fetch(url, { cache: force ? "reload" : "no-store" });
+      setText("dbg_status", "HTTP " + res.status + (force ? " (force)" : ""));
       setText("dbg_ct", res.headers.get("content-type") || "(tidak ada)");
 
       var raw = await res.text();
@@ -161,7 +203,7 @@
 
       var json = JSON.parse(raw);
       var arr = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
-      data = arr.map(function(x){
+      var freshData = arr.map(function(x){
         return {
           operator: String((x && (x.operator != null ? x.operator : x.Operator)) || "").trim(),
           nama: String((x && (x.nama != null ? x.nama : x["Nama Voucher"])) || "").trim(),
@@ -169,16 +211,34 @@
         };
       }).filter(function(x){ return x.operator && x.nama; });
 
-      setText("dbg_count", String(data.length));
-      var ops = Array.from(new Set(data.map(function(d){ return d.operator; }))).sort();
+      // Debug
+      setText("dbg_count", String(freshData.length));
+      var ops = Array.from(new Set(freshData.map(function(d){ return d.operator; }))).sort();
       setText("dbg_ops", ops.join(", ") || "-");
-      setText("dbg_sample", JSON.stringify(data.slice(0,3), null, 2));
+      setText("dbg_sample", JSON.stringify(freshData.slice(0,3), null, 2));
 
-      buildOperator(ops);
-      buildVoucher();
+      // 3) Simpan ke cache SELALU
+      saveCatalogToCache(freshData);
+
+      // 4) Render decide
+      var hadCache = !!(cached && Array.isArray(cached.data) && cached.data.length);
+      var cacheWasFresh = !!(cached && isFresh(cached.ts));
+      data = freshData;
+
+      if (force) {
+        buildOperator(ops);
+        buildVoucher();
+      } else if (!hadCache || !cacheWasFresh){
+        buildOperator(ops);
+        buildVoucher();
+      }
+      // jika hadCache & fresh & bukan force → biarkan UI, data baru sudah siap dipakai
+
     } catch(e) {
-      err.textContent = "Gagal memuat data. Klik tombol Debug untuk lihat detail.";
-      err.style.display = "block";
+      if (!(cached && cached.data && cached.data.length)){
+        err.textContent = "Gagal memuat data. Klik tombol Debug untuk lihat detail.";
+        err.style.display = "block";
+      }
       console.error(e);
     }
   }
@@ -186,7 +246,6 @@
   function buildOperator(ops) {
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(ops.map(function(o){ return { value:o, label:o }; }));
-    // Operator: render sekali saat setOptions (open tidak merender ulang)
     opSel.setOptions(options);
     opSel.setValue("", false);
   }
@@ -196,11 +255,9 @@
     var items = data.filter(function(d){ return d.operator === op; });
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(items.map(function(d){ return { value:d.nama, label:(d.nama+" - "+rupiah(d.harga)) }; }));
-    // Voucher: render ulang HANYA saat operator berubah,
-    // minta reset scroll ke atas pada open berikutnya
     vSel.setOptions(options, { resetOnOpen: true });
     vSel.setValue("", false);
-    document.getElementById("qty").value = ""; // Set to empty string
+    document.getElementById("qty").value = "";
   }
 
   function addToCart() {
@@ -208,13 +265,8 @@
     var nm = vSel.getValue();
     var qtyInput = document.getElementById("qty").value;
     var qty = parseInt(qtyInput, 10);
-    if (!qtyInput || isNaN(qty) || qty <= 0) {
-      qty = 1; // Default to 1 if input is empty or invalid
-    }
-    if (!op || !nm) {
-      alert("Pilih operator dan voucher yang valid.");
-      return;
-    }
+    if (!qtyInput || isNaN(qty) || qty <= 0) qty = 1;
+    if (!op || !nm) { alert("Pilih operator dan voucher yang valid."); return; }
     var v = data.find(function(x){ return x.operator === op && x.nama === nm; });
     if (!v) return;
 
@@ -223,7 +275,7 @@
     else cart.push({ operator: op, nama: nm, harga: v.harga, qty: qty });
 
     renderCart();
-    document.getElementById("qty").value = ""; // Clear input after adding
+    document.getElementById("qty").value = "";
   }
 
   function calcTotals() {
@@ -233,7 +285,7 @@
     return { grand: grand };
   }
 
-  // ===== PATCHED: renderCart aman (tanpa innerHTML) + click only =====
+  // ===== renderCart aman (tanpa innerHTML) + click only =====
   function renderCart() {
     var tbody = document.querySelector("#cart tbody");
     tbody.innerHTML = "";
@@ -301,7 +353,6 @@
       tbody.appendChild(tr);
     });
 
-    // Event delegation: gunakan click saja
     tbody.onclick = function(e){
       var t = e.target;
       if (!(t instanceof Element)) return;
@@ -336,13 +387,10 @@
     calcTotals();
   }
 
-  // ===== PATCHED: printReceipt aman (tanpa innerHTML) + click only =====
+  // ===== printReceipt aman =====
   function printReceipt() {
     var totals = calcTotals();
-    if (cart.length === 0) {
-      alert("Keranjang kosong, tidak ada yang bisa dibagikan.");
-      return;
-    }
+    if (cart.length === 0) { alert("Keranjang kosong, tidak ada yang bisa dibagikan."); return; }
     try {
       var lines = [];
       lines.push("STRUK PEMBELIAN VOUCHER");
@@ -421,7 +469,7 @@
       var pre = document.createElement("pre");
       pre.style.margin = "0";
       pre.style.whiteSpace = "pre-wrap";
-      pre.textContent = text; // aman dari XSS
+      pre.textContent = text;
 
       var controls = document.createElement("div");
       controls.style.display = "flex";
@@ -477,7 +525,34 @@
     var btnToggleDbg = document.getElementById("btnToggleDbg");
 
     if (btnAdd) btnAdd.addEventListener("click", addToCart);
-    if (btnReload) btnReload.addEventListener("click", load);
+
+    if (btnReload) {
+      function setReloadLoading(on){
+        btnReload.classList.toggle("spin", !!on);
+        btnReload.disabled = !!on;
+        btnReload.setAttribute("aria-busy", on ? "true" : "false");
+        btnReload.title = on ? "Memuat data…" : "Reload data";
+
+        // Izinkan animasi sementara, agar tetap berputar walau prefers-reduced-motion: reduce
+        if (on) {
+          document.documentElement.setAttribute("data-allow-motion", "true");
+        } else {
+          document.documentElement.removeAttribute("data-allow-motion");
+        }
+      }
+
+      btnReload.addEventListener("click", async function(){
+        if (btnReload.disabled) return;   // cegah double click
+        setReloadLoading(true);
+        try {
+          await load(true);               // bypass TTL, simpan cache, rerender
+        } finally {
+          setReloadLoading(false);
+        }
+      });
+    }
+
+
     if (btnReset) btnReset.addEventListener("click", function(){
       cart = [];
       renderCart();
@@ -496,11 +571,9 @@
       function applyTheme(theme){
         document.documentElement.setAttribute("data-theme", theme);
         try { localStorage.setItem(key, theme); } catch(_) {}
-        // ikon & aksesibilitas
         tbtn.textContent = (theme === "dark") ? "🌙" : "☀️";
         tbtn.title = (theme === "dark") ? "Switch to light mode" : "Switch to dark mode";
         tbtn.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
-        // update meta theme-color untuk status bar mobile
         var meta = document.querySelector('meta[name="theme-color"]');
         if (!meta){
           meta = document.createElement("meta");
@@ -510,10 +583,8 @@
         var bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
         meta.setAttribute("content", bg || (theme === "dark" ? "#0b0f14" : "#ffffff"));
       }
-      // tema awal dari attribute yang sudah diset di <head>
       var current = document.documentElement.getAttribute("data-theme") || "dark";
       applyTheme(current);
-      // toggle klik
       tbtn.addEventListener("click", function(){
         var next = (document.documentElement.getAttribute("data-theme") === "dark") ? "light" : "dark";
         applyTheme(next);
