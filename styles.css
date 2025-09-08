@@ -502,3 +502,19 @@ pre{ white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255
   table td:nth-child(4), table th:nth-child(4) { min-width: 160px; width: 160px; }
   .qty-input { width: clamp(60px, 9ch, 84px); min-width: 7ch; }
 }
+
+.btn:disabled { opacity:.55; cursor:not-allowed; filter:saturate(.6); }
+
+/* ===== Sticky Footer: Last Fetching ===== */
+.app-footer{
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  text-align: center;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  color: var(--muted);
+  font-size: 12px;
+  /* background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); */
+  /* border-top: 1px solid var(--border); */
+}
+
