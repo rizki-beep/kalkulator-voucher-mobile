@@ -454,9 +454,38 @@ pre{ white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255
   background: linear-gradient(180deg, rgba(0,0,0,0.04), rgba(0,0,0,0.02));
 }
 
+/* POSISI RELOAD: di kiri toggle tema, ukuran sama */
+.theme-reload{
+  position: absolute;
+  top: 12px;
+  right: 56px; /* 40px tombol + 12px gap + 4px buffer */
+}
+
+/* Animasi spin untuk tombol reload */
+.theme-reload.spin {
+  animation: btnspin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* Saat loading, nonaktifkan klik & beri hint visual */
+.theme-reload[disabled] {
+  opacity: 0.65;
+  cursor: progress;
+}
+
+@keyframes btnspin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Matikan animasi HANYA jika tidak ada izin sementara */
+  :root:not([data-allow-motion="true"]) .theme-reload.spin {
+    animation: none;
+  }
+}
+
 /* Optional: bila masih sempit */
 @media (orientation: landscape) {
   table td:nth-child(4), table th:nth-child(4) { min-width: 160px; width: 160px; }
   .qty-input { width: clamp(60px, 9ch, 84px); min-width: 7ch; }
 }
-
