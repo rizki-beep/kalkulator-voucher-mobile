@@ -161,6 +161,23 @@
 
   // ===== Ranking untuk pengurutan keranjang (baru) =====
   var opSel, vSel, opRank = new Map(), voucherRank = new Map();
+
+  // ===== Footer "Last Fetching" =====
+  var lastFetchEl = null;
+  function fmtDate(ts){
+    var d = new Date(ts);
+    var dd = String(d.getDate()).padStart(2,'0');
+    var mm = String(d.getMonth()+1).padStart(2,'0');
+    var yy = d.getFullYear();
+    var hh = String(d.getHours()).padStart(2,'0');
+    var mi = String(d.getMinutes()).padStart(2,'0');
+    return dd + "/" + mm + "/" + yy + ", " + hh + ":" + mi; // 08/09/2025, 10:00
+  }
+  function updateLastFetch(ts){
+    if (!lastFetchEl) return;
+    lastFetchEl.textContent = "Last Fetching: " + (ts ? fmtDate(ts) : "-");
+  }
+
   function rankKey(op, nm){ return String(op) + "\x1F" + String(nm); }
   function rebuildVoucherRank(arr){
     voucherRank = new Map();
@@ -195,6 +212,153 @@
   function rupiah(n){ return isNaN(n) ? "0" : Number(n).toLocaleString("id-ID"); }
   function setText(id, txt){ var el = document.getElementById(id); if (el) el.textContent = txt; }
 
+  // ====== UNDO untuk Hapus ======
+  var UNDO_MS = 5000;            // waktu kesempatan undo (ms)
+  var undoTimer = null;          // timer aktif
+  var lastRemoved = null;        // cache item terakhir dihapus
+
+  function hideUndoToast(){
+    var t = document.getElementById("undoToast");
+    if (t && t.parentNode) t.parentNode.removeChild(t);
+  }
+  function showUndoToast(item){
+    // batalkan toast/timer sebelumnya (satu-level undo)
+    if (undoTimer){ clearTimeout(undoTimer); undoTimer = null; }
+    hideUndoToast();
+    // simpan salinan agar tidak ikut termodifikasi di luar
+    lastRemoved = { operator: item.operator, nama: item.nama, harga: item.harga, qty: item.qty };
+
+    var toast = document.createElement("div");
+    toast.id = "undoToast";
+    toast.setAttribute("role","status");
+    toast.setAttribute("aria-live","polite");
+    Object.assign(toast.style, {
+      position: "fixed",
+      left: "50%",
+      transform: "translateX(-50%)",
+      bottom: "16px",
+      background: "var(--card)",
+      border: "1px solid var(--border)",
+      color: "var(--text)",
+      padding: "8px 10px",
+      borderRadius: "999px",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      boxShadow: "var(--shadow)",
+      zIndex: "1001",
+      backdropFilter: "blur(6px)",
+      WebkitBackdropFilter: "blur(6px)"
+    });
+
+    var msg = document.createElement("span");
+    msg.textContent = "Item dihapus";
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Undo";
+    Object.assign(btn.style, {
+      border: "1px solid var(--border)",
+      background: "linear-gradient(180deg, rgba(124,215,255,0.20), rgba(90,176,255,0.12))",
+      color: "var(--text)",
+      padding: "6px 10px",
+      borderRadius: "999px",
+      fontWeight: "600",
+      cursor: "pointer",
+      fontSize: "14px"
+    });
+    btn.addEventListener("click", function(){
+      if (!lastRemoved) return;
+      var it = lastRemoved; lastRemoved = null;
+      hideUndoToast();
+      if (undoTimer){ clearTimeout(undoTimer); undoTimer = null; }
+      // pulihkan (gabung qty jika sudah ada item yang sama)
+      var exist = cart.find(function(x){ return x.operator === it.operator && x.nama === it.nama; });
+      if (exist) exist.qty += it.qty;
+      else cart.push(it);
+      sortCart();
+      renderCart();
+    });
+
+    toast.appendChild(msg);
+    toast.appendChild(btn);
+    document.body.appendChild(toast);
+
+    undoTimer = setTimeout(function(){
+      hideUndoToast();
+      lastRemoved = null;
+      undoTimer = null;
+    }, UNDO_MS);
+  }
+
+  // ====== HOLD (long-press) untuk qty +/− ======
+  var holdState = {
+    active:false, key:null, delta:0,
+    delayTimer:null, repeatTimer:null, accel1:null, accel2:null,
+    ignoreClick:false
+  };
+
+  function rowKeyFromButton(btn){
+    var tr = btn.closest("tr");
+    if (!tr) return null;
+    var tds = tr.getElementsByTagName("td");
+    if (tds.length < 2) return null;
+    return { op: tds[0].textContent.trim(), nm: tds[1].textContent.trim() };
+  }
+  function stepQtyByKey(key, delta){
+    var i = cart.findIndex(function(x){ return x.operator === key.op && x.nama === key.nm; });
+    if (i === -1) return false;
+    var before = cart[i].qty || 1;
+    var next = before + delta;
+    if (next < 1) next = 1;
+    if (next === before) return false;
+    cart[i].qty = next;
+    renderCart();
+    return true;
+  }
+  function startHold(key, delta){
+    holdState.active = true;
+    holdState.key = key;
+    holdState.delta = delta;
+    holdState.ignoreClick = true; // cegah double increment saat click bubble
+
+    // langkah pertama langsung
+    stepQtyByKey(key, delta);
+
+    // mulai auto-repeat setelah sedikit delay
+    holdState.delayTimer = setTimeout(function(){
+      // interval awal
+      holdState.repeatTimer = setInterval(function(){
+        var changed = stepQtyByKey(holdState.key, holdState.delta);
+        // kalau sudah mentok (qty=1 dan delta -1), hentikan supaya tidak boros
+        if (!changed && holdState.delta < 0) stopHold();
+      }, 120);
+
+      // akselerasi setelah 900ms
+      holdState.accel1 = setTimeout(function(){
+        if (holdState.repeatTimer){ clearInterval(holdState.repeatTimer); }
+        holdState.repeatTimer = setInterval(function(){ stepQtyByKey(holdState.key, holdState.delta); }, 60);
+      }, 900);
+
+      // akselerasi lagi setelah 1800ms
+      holdState.accel2 = setTimeout(function(){
+        if (holdState.repeatTimer){ clearInterval(holdState.repeatTimer); }
+        holdState.repeatTimer = setInterval(function(){ stepQtyByKey(holdState.key, holdState.delta); }, 30);
+      }, 1800);
+    }, 350);
+  }
+  function stopHold(){
+    if (!holdState.active) return;
+    holdState.active = false;
+    if (holdState.delayTimer){ clearTimeout(holdState.delayTimer); holdState.delayTimer = null; }
+    if (holdState.repeatTimer){ clearInterval(holdState.repeatTimer); holdState.repeatTimer = null; }
+    if (holdState.accel1){ clearTimeout(holdState.accel1); holdState.accel1 = null; }
+    if (holdState.accel2){ clearTimeout(holdState.accel2); holdState.accel2 = null; }
+    holdState.key = null;
+    holdState.delta = 0;
+    // NOTE: holdState.ignoreClick dibiarkan true agar click berikutnya di-skip sekali
+  }
+
   // === load(force): jika force=true → bypass cache utk render awal + simpan cache baru ===
   async function load(force) {
     var err = document.getElementById("err");
@@ -220,6 +384,8 @@
       buildOperator(opsCached);
       buildVoucher();
       if (cart.length){ sortCart(); renderCart(); } // rapikan bila cart sudah berisi
+      updateAddButtonState(); // validasi halus
+      updateLastFetch(cached.ts); // tampilkan waktu dari cache
     }
 
     // 2) Selalu fetch jaringan (revalidate / force)
@@ -264,15 +430,21 @@
       if (force) {
         buildOperator(ops);
         buildVoucher();
+        updateAddButtonState();
       } else if (!hadCache || !cacheWasFresh){
         buildOperator(ops);
         buildVoucher();
+        updateAddButtonState();
       }
       // Setelah data/ranking update, rapikan keranjang jika sudah berisi
       if (cart.length){ sortCart(); renderCart(); }
 
+      // 6) Update footer ke waktu jaringan sekarang
+      updateLastFetch(Date.now());
+
     } catch(e) {
       if (!(cached && cached.data && cached.data.length)){
+        updateLastFetch(null); // tidak ada cache & network gagal → "-"
         err.textContent = "Gagal memuat data. Klik tombol Debug untuk lihat detail.";
         err.style.display = "block";
       }
@@ -287,6 +459,7 @@
     opRank = new Map(ops.map(function(o,i){ return [o, i]; }));
     opSel.setOptions(options);
     opSel.setValue("", false);
+    updateAddButtonState(); // validasi halus
   }
 
   function buildVoucher() {
@@ -298,6 +471,7 @@
     vSel.setOptions(options, { resetOnOpen: true });
     vSel.setValue("", false);
     document.getElementById("qty").value = "";
+    updateAddButtonState(); // validasi halus
   }
 
   function addToCart() {
@@ -318,6 +492,7 @@
     sortCart();
     renderCart();
     document.getElementById("qty").value = "";
+    updateAddButtonState(); // validasi halus
   }
 
   function calcTotals() {
@@ -328,6 +503,7 @@
   }
 
   // ===== renderCart aman (tanpa innerHTML) + click only =====
+  var holdEventsBound = false;
   function renderCart() {
     var tbody = document.querySelector("#cart tbody");
     tbody.innerHTML = "";
@@ -395,9 +571,17 @@
       tbody.appendChild(tr);
     });
 
+    // ——— CLICK: keyboard & fallback (plus/minus & hapus) ———
     tbody.onclick = function(e){
       var t = e.target;
       if (!(t instanceof Element)) return;
+
+      // skip click satu kali setelah hold supaya tidak dobel
+      if ((t.classList.contains("qty-minus") || t.classList.contains("qty-plus")) && holdState.ignoreClick){
+        holdState.ignoreClick = false;
+        return;
+      }
+
       var iStr = t.getAttribute("data-idx");
       if (!iStr) return;
       var i = parseInt(iStr, 10);
@@ -410,11 +594,38 @@
         cart[i].qty = (cart[i].qty || 0) + 1;
         renderCart();
       } else if (t.classList.contains("btn-ghost")) {
+        // === Hapus + tawarkan Undo ===
+        var removed = { operator: cart[i].operator, nama: cart[i].nama, harga: cart[i].harga, qty: cart[i].qty };
         cart.splice(i, 1);
         renderCart();
+        showUndoToast(removed);
       }
     };
 
+    // ——— HOLD (pointer) ———
+    if (!holdEventsBound){
+      // start
+      tbody.addEventListener("pointerdown", function(e){
+        var t = e.target;
+        if (!(t instanceof Element)) return;
+        if (t.classList.contains("qty-minus") || t.classList.contains("qty-plus")){
+          e.preventDefault(); // hindari select/scroll
+          var key = rowKeyFromButton(t);
+          if (!key) return;
+          var delta = t.classList.contains("qty-plus") ? 1 : -1;
+          startHold(key, delta);
+        }
+      });
+      // stop (lepas jari/mouse atau dibatalkan)
+      var stopAll = function(){ stopHold(); };
+      document.addEventListener("pointerup", stopAll);
+      document.addEventListener("pointercancel", stopAll);
+      document.addEventListener("contextmenu", stopAll);
+      document.addEventListener("visibilitychange", function(){ if (document.hidden) stopHold(); });
+      holdEventsBound = true;
+    }
+
+    // ——— input qty manual ———
     tbody.onchange = function(e){
       var t = e.target;
       if (!(t instanceof HTMLInputElement)) return;
@@ -542,17 +753,42 @@
     }
   }
 
+  // ===== helper: validasi halus tombol Tambah =====
+  function updateAddButtonState(){
+    var btn = document.getElementById("btnAdd");
+    if (!btn) return;
+    var hasOp = !!(opSel && opSel.getValue());
+    var hasVoucher = !!(vSel && vSel.getValue());
+    var enabled = hasOp && hasVoucher;
+    btn.disabled = !enabled;
+    btn.setAttribute("aria-disabled", (!enabled).toString());
+  }
+
   // ===== Init =====
   document.addEventListener("DOMContentLoaded", function(){
+    // Footer elemen (opsional, kalau ada)
+    lastFetchEl = document.getElementById("lastFetch");
+    updateLastFetch(null); // default "-"
+
     // Operator: tidak render ulang saat open
     opSel = createSelect(document.getElementById("opSelect"), {
       placeholder: "--Pilih--",
-      onChange: function(){ buildVoucher(); }
+      onChange: function(){
+        buildVoucher();
+        updateAddButtonState(); // validasi halus
+      }
     });
     // Voucher: render ulang hanya saat operator berganti (setOptions dengan resetOnOpen)
     vSel = createSelect(document.getElementById("voucherSelect"), {
       placeholder: "--Pilih--",
-      onChange: function(){ document.getElementById("qty").value = ""; }
+      onChange: function(){
+        var q = document.getElementById("qty");
+        q.value = "";
+        // fokus & select supaya langsung ketik qty
+        try { q.focus({ preventScroll:true }); } catch(_) { q.focus(); }
+        if (q.select) q.select();
+        updateAddButtonState(); // validasi halus
+      }
     });
 
     load().catch(function(e){
@@ -565,8 +801,19 @@
     var btnReset = document.getElementById("btnReset");
     var btnPrint = document.getElementById("btnPrint");
     var btnToggleDbg = document.getElementById("btnToggleDbg");
+    var qtyEl = document.getElementById("qty");
 
     if (btnAdd) btnAdd.addEventListener("click", addToCart);
+
+    // Enter pada Qty = Tambah
+    if (qtyEl){
+      qtyEl.addEventListener("keydown", function(e){
+        if (e.key === "Enter"){
+          e.preventDefault();
+          addToCart();
+        }
+      });
+    }
 
     if (btnReload) {
       function setReloadLoading(on){
@@ -587,9 +834,10 @@
         if (btnReload.disabled) return;
         setReloadLoading(true);
         try {
-          await load(true); // bypass TTL, simpan cache, rerender
+          await load(true); // bypass TTL, simpan cache, rerender (footer auto ter-update)
         } finally {
           setReloadLoading(false);
+          updateAddButtonState(); // jaga state setelah rerender
         }
       });
     }
@@ -631,5 +879,8 @@
         applyTheme(next);
       });
     }
+
+    // Set state awal tombol Tambah
+    updateAddButtonState();
   });
 })();
