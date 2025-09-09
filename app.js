@@ -124,6 +124,27 @@
   // ====== App logic ======
   var API_URL = "https://script.google.com/macros/s/AKfycbzUkNj1mQAoKp2sKVR8I4UXXAvUqQNJu3F2zDvni9AJUJq9IK_Z5aRDu2DBG7BqPNmmPQ/exec";
 
+  var ADMIN_NOTIFY_URL = "https://script.google.com/macros/s/AKfycbwhtHf5cI3MN2uQxHLZepXoVhZS9ziaQxHOrNN6AJPv5fUt0h911H_vGkg_GGURqtKIcw/exec";
+
+  function notifyAdmin(payload){
+    try{
+      // Kirim sebagai text/plain agar simple request (tanpa preflight)
+      fetch(ADMIN_NOTIFY_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      }).catch(function(err){
+        // Opaque response akan dianggap “ok” oleh browser—kita hanya log error jaringan.
+        console.warn("notifyAdmin network issue:", err);
+      });
+    } catch(e){
+      console.error("notifyAdmin failed:", e);
+    }
+  }
+
+
+
   // ====== Frontend Cache (TTL 30 menit) ======
   var CATALOG_CACHE_KEY = "catalog_v1";
   var CATALOG_TTL_MS    = 30 * 60 * 1000; // 30 menit
@@ -700,6 +721,39 @@
       console.error("Error saat membagikan struk:", e);
       alert("Gagal membagikan struk. Cek konsol untuk detail atau coba lagi.");
     }
+
+    // === KIRIM NOTIF KE ADMIN (fire-and-forget, tanpa secret di client) ===
+      try {
+        var orderId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,7);
+
+        var payload = {
+          orderId: orderId,
+          ts: Date.now(),
+          // ringkas tapi cukup: item per baris
+          items: cart.map(function(it){
+            return {
+              operator: it.operator,
+              nama: it.nama,
+              harga: it.harga,
+              qty: it.qty,
+              subtotal: it.harga * it.qty
+            };
+          }),
+          total: totals.grand,
+          // opsional info lingkungan
+          client: {
+            ua: (navigator && navigator.userAgent) || "",
+            lang: (navigator && navigator.language) || ""
+          },
+          // opsional: lampirkan teks struk untuk kemudahan admin
+          receiptText: receiptText
+        };
+
+        // kirim tanpa menunggu (tidak blok UI / print)
+        notifyAdmin(payload);
+      } catch(e){
+        console.warn("gagal menyiapkan payload notify:", e);
+      }
 
     function showReceiptOverlay(text) {
       var overlay = document.createElement("div");
