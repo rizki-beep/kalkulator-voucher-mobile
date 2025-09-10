@@ -41,13 +41,16 @@ body {
   display: flex;
   flex-direction: column;
   min-height: calc(100dvh - 24px);
+  @supports (height: 100shv){
+    .app{ min-height: calc(100shv - 24px);}
+  }
   max-width: 100%;
   margin: 0 auto;
   background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  overflow: hidden;
+  overflow: visible;
 }
 
 header {
@@ -59,7 +62,7 @@ header {
 header h1 { margin: 0; font-size: 18px; font-weight: 600; }
 header p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 
-.content { flex: 1 0 auto; padding: 12px 16px; }
+.content { flex: 1 1 auto; padding: 12px 16px; }
 
 .panel {
   background: var(--card);
@@ -512,15 +515,13 @@ pre{ white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255
 
 .btn:disabled { opacity:.55; cursor:not-allowed; filter:saturate(.6); }
 
-
-/* ganti selector ini: footer { … } */
 .app > footer{
   position: static;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
   text-align: center;
   font-size: 12px;
   color: var(--muted);
-  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03));
-  border-top: 1px solid var(--border); /* garis pemisah seperti header */
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03));             /* solid, tidak semi-transparan */
+  border-top: 1px solid var(--border);
   margin-top: 0;
 }
