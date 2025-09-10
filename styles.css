@@ -296,7 +296,10 @@ table td:nth-child(4), table th:nth-child(4){
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: manipulation;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 .qty-btn:active{ transform: translateY(1px); }
 
@@ -517,4 +520,3 @@ pre{ white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255
   /* background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); */
   /* border-top: 1px solid var(--border); */
 }
-
