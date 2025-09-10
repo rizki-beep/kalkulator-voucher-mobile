@@ -145,9 +145,9 @@
 
 
 
-  // ====== Frontend Cache (TTL 30 menit) ======
+  // ====== Frontend Cache (TTL 8 jam) ======
   var CATALOG_CACHE_KEY = "catalog_v1";
-  var CATALOG_TTL_MS    = 30 * 60 * 1000; // 30 menit
+  var CATALOG_TTL_MS    = 480 * 60 * 1000; // 30 menit
   var MAX_CACHE_BYTES   = 200 * 1024;     // guard 200KB
 
   function hashString(str){
@@ -626,25 +626,42 @@
     // ——— HOLD (pointer) ———
     if (!holdEventsBound){
       // start
-      tbody.addEventListener("pointerdown", function(e){
-        var t = e.target;
+      const onPointerDown = function(e){
+        const t = e.target;
         if (!(t instanceof Element)) return;
         if (t.classList.contains("qty-minus") || t.classList.contains("qty-plus")){
-          e.preventDefault(); // hindari select/scroll
-          var key = rowKeyFromButton(t);
+          // penting di Android: cegah scroll/gesture default
+          e.preventDefault();
+          const key = rowKeyFromButton(t);
           if (!key) return;
-          var delta = t.classList.contains("qty-plus") ? 1 : -1;
+          const delta = t.classList.contains("qty-plus") ? 1 : -1;
           startHold(key, delta);
         }
-      });
+      };
+      tbody.addEventListener("pointerdown", onPointerDown, { passive: false });
+
       // stop (lepas jari/mouse atau dibatalkan)
-      var stopAll = function(){ stopHold(); };
-      document.addEventListener("pointerup", stopAll);
-      document.addEventListener("pointercancel", stopAll);
-      document.addEventListener("contextmenu", stopAll);
-      document.addEventListener("visibilitychange", function(){ if (document.hidden) stopHold(); });
+      const stopAll = function(){ stopHold(); };
+      document.addEventListener("pointerup", stopAll, { passive: true });
+      document.addEventListener("pointercancel", stopAll, { passive: true });
+
+
+      // ✅ BLOK contextmenu HANYA pada tombol +/- agar hold tetap jalan
+      tbody.addEventListener("contextmenu", function(e){
+        const t = e.target;
+        if (!(t instanceof Element)) return;
+        if (t.classList.contains("qty-minus") || t.classList.contains("qty-plus")){
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      document.addEventListener("visibilitychange", function(){
+        if (document.hidden) stopHold();
+      });
+
       holdEventsBound = true;
     }
+
 
     // ——— input qty manual ———
     tbody.onchange = function(e){
