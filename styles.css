@@ -18,8 +18,11 @@
 }
 
 * { box-sizing: border-box; }
-html { height: 100%; }
-body { min-height: 100%; }
+html { height: auto; }
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
 
 body {
   margin: 0;
@@ -50,7 +53,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  overflow: visible;
+  overflow: clip;
 }
 
 header {
@@ -146,7 +149,7 @@ label {
 }
 .gselect .gitem:last-child { border-bottom: none; }
 .gselect .gitem[aria-selected="true"] { color: #fff; background: rgba(90,176,255,0.22); }
-.gselect .gitem[aria-current="true"] { outline: 2px solid rgba(124,215,255,0.45); outline-offset: -2px; }
+.gselect .gitem[aria-current="true"] { outline: 2px solid rgba(124,215,255,0.45); outline-offset: -2px; border-radius: 8px; }
 .gselect .gitem:focus-visible { box-shadow: var(--focus-ring); border-color: var(--accent-2); }
 
 /* Inputs & buttons */
@@ -277,8 +280,8 @@ tbody tr:nth-child(even){ background: rgba(255,255,255,0.03); }
 .qty-input::-webkit-textfield-decoration-container{ display: none; }
 
 table td:nth-child(4), table th:nth-child(4){
-  width: 120px;
-  min-width: 120px;
+  width: 170px;
+  min-width: 160px;
   padding: 8px 2px;
 }
 
