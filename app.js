@@ -135,7 +135,6 @@
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(payload)
       }).catch(function(err){
-        // Opaque response akan dianggap “ok” oleh browser—kita hanya log error jaringan.
         console.warn("notifyAdmin network issue:", err);
       });
     } catch(e){
@@ -143,12 +142,10 @@
     }
   }
 
-
-
   // ====== Frontend Cache (TTL 8 jam) ======
   var CATALOG_CACHE_KEY = "catalog_v1";
-  var CATALOG_TTL_MS    = 480 * 60 * 1000; // 30 menit
-  var MAX_CACHE_BYTES   = 200 * 1024;     // guard 200KB
+  var CATALOG_TTL_MS    = 480 * 60 * 1000;
+  var MAX_CACHE_BYTES   = 200 * 1024;
 
   function hashString(str){
     var h = 5381;
@@ -158,11 +155,27 @@
   function computeHash(arr){
     try { return hashString(JSON.stringify(arr)); } catch(_) { return ""; }
   }
+
+  // ====== DEDUPE: signature & storage ======
+  var LAST_SENT_SIGS_KEY = "sent_order_sigs";
+  function getOrderSig(cartArr, total){
+    var norm = cartArr.map(function(it){
+      return [String(it.operator||""), String(it.nama||""), Number(it.harga||0), Number(it.qty||0)];
+    }).sort(function(a,b){
+      if (a[0] !== b[0]) return a[0] < b[0] ? -1 : 1;
+      if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1;
+      if (a[2] !== b[2]) return a[2] - b[2];
+      return a[3] - b[3];
+    });
+    try { return hashString(JSON.stringify({ items:norm, total:Number(total||0) })); }
+    catch(_) { return String(total)+":"+norm.map(function(r){return r.join("|");}).join(";"); }
+  }
+
   function saveCatalogToCache(arr){
     try {
       var payload = { ts: Date.now(), data: arr, hash: computeHash(arr) };
       var json = JSON.stringify(payload);
-      if (json.length > MAX_CACHE_BYTES) return; // terlalu besar → jangan cache
+      if (json.length > MAX_CACHE_BYTES) return;
       localStorage.setItem(CATALOG_CACHE_KEY, json);
     } catch(_) { /* quota penuh → abaikan */ }
   }
@@ -192,7 +205,7 @@
     var yy = d.getFullYear();
     var hh = String(d.getHours()).padStart(2,'0');
     var mi = String(d.getMinutes()).padStart(2,'0');
-    return dd + "/" + mm + "/" + yy + ", " + hh + ":" + mi; // 08/09/2025, 10:00
+    return dd + "/" + mm + "/" + yy + ", " + hh + ":" + mi;
   }
   function updateLastFetch(ts){
     if (!lastFetchEl) return;
@@ -234,19 +247,17 @@
   function setText(id, txt){ var el = document.getElementById(id); if (el) el.textContent = txt; }
 
   // ====== UNDO untuk Hapus ======
-  var UNDO_MS = 5000;            // waktu kesempatan undo (ms)
-  var undoTimer = null;          // timer aktif
-  var lastRemoved = null;        // cache item terakhir dihapus
+  var UNDO_MS = 5000;
+  var undoTimer = null;
+  var lastRemoved = null;
 
   function hideUndoToast(){
     var t = document.getElementById("undoToast");
     if (t && t.parentNode) t.parentNode.removeChild(t);
   }
   function showUndoToast(item){
-    // batalkan toast/timer sebelumnya (satu-level undo)
     if (undoTimer){ clearTimeout(undoTimer); undoTimer = null; }
     hideUndoToast();
-    // simpan salinan agar tidak ikut termodifikasi di luar
     lastRemoved = { operator: item.operator, nama: item.nama, harga: item.harga, qty: item.qty };
 
     var toast = document.createElement("div");
@@ -293,7 +304,6 @@
       var it = lastRemoved; lastRemoved = null;
       hideUndoToast();
       if (undoTimer){ clearTimeout(undoTimer); undoTimer = null; }
-      // pulihkan (gabung qty jika sudah ada item yang sama)
       var exist = cart.find(function(x){ return x.operator === it.operator && x.nama === it.nama; });
       if (exist) exist.qty += it.qty;
       else cart.push(it);
@@ -341,27 +351,21 @@
     holdState.active = true;
     holdState.key = key;
     holdState.delta = delta;
-    holdState.ignoreClick = true; // cegah double increment saat click bubble
+    holdState.ignoreClick = true;
 
-    // langkah pertama langsung
     stepQtyByKey(key, delta);
 
-    // mulai auto-repeat setelah sedikit delay
     holdState.delayTimer = setTimeout(function(){
-      // interval awal
       holdState.repeatTimer = setInterval(function(){
         var changed = stepQtyByKey(holdState.key, holdState.delta);
-        // kalau sudah mentok (qty=1 dan delta -1), hentikan supaya tidak boros
         if (!changed && holdState.delta < 0) stopHold();
       }, 120);
 
-      // akselerasi setelah 900ms
       holdState.accel1 = setTimeout(function(){
         if (holdState.repeatTimer){ clearInterval(holdState.repeatTimer); }
         holdState.repeatTimer = setInterval(function(){ stepQtyByKey(holdState.key, holdState.delta); }, 60);
       }, 900);
 
-      // akselerasi lagi setelah 1800ms
       holdState.accel2 = setTimeout(function(){
         if (holdState.repeatTimer){ clearInterval(holdState.repeatTimer); }
         holdState.repeatTimer = setInterval(function(){ stepQtyByKey(holdState.key, holdState.delta); }, 30);
@@ -377,7 +381,6 @@
     if (holdState.accel2){ clearTimeout(holdState.accel2); holdState.accel2 = null; }
     holdState.key = null;
     holdState.delta = 0;
-    // NOTE: holdState.ignoreClick dibiarkan true agar click berikutnya di-skip sekali
   }
 
   // === load(force): jika force=true → bypass cache utk render awal + simpan cache baru ===
@@ -397,16 +400,16 @@
     var cached = !force ? loadCatalogFromCache() : null;
     if (cached && Array.isArray(cached.data) && cached.data.length){
       data = cached.data;
-      rebuildVoucherRank(data); // bangun ranking voucher dari urutan data (sheet)
+      rebuildVoucherRank(data);
       setText("dbg_count", String(data.length));
       var opsCached = Array.from(new Set(data.map(function(d){ return d.operator; }))).sort();
       setText("dbg_ops", opsCached.join(", ") || "-");
       setText("dbg_sample", JSON.stringify(data.slice(0,3), null, 2));
       buildOperator(opsCached);
       buildVoucher();
-      if (cart.length){ sortCart(); renderCart(); } // rapikan bila cart sudah berisi
-      updateAddButtonState(); // validasi halus
-      updateLastFetch(cached.ts); // tampilkan waktu dari cache
+      if (cart.length){ sortCart(); renderCart(); }
+      updateAddButtonState();
+      updateLastFetch(cached.ts);
     }
 
     // 2) Selalu fetch jaringan (revalidate / force)
@@ -431,19 +434,14 @@
         };
       }).filter(function(x){ return x.operator && x.nama; });
 
-      // Debug
       setText("dbg_count", String(freshData.length));
       var ops = Array.from(new Set(freshData.map(function(d){ return d.operator; }))).sort();
       setText("dbg_ops", ops.join(", ") || "-");
       setText("dbg_sample", JSON.stringify(freshData.slice(0,3), null, 2));
 
-      // 3) Simpan ke cache SELALU
       saveCatalogToCache(freshData);
-
-      // 4) Ranking voucher dari data baru
       rebuildVoucherRank(freshData);
 
-      // 5) Render decide
       var hadCache = !!(cached && Array.isArray(cached.data) && cached.data.length);
       var cacheWasFresh = !!(cached && isFresh(cached.ts));
       data = freshData;
@@ -457,15 +455,12 @@
         buildVoucher();
         updateAddButtonState();
       }
-      // Setelah data/ranking update, rapikan keranjang jika sudah berisi
       if (cart.length){ sortCart(); renderCart(); }
-
-      // 6) Update footer ke waktu jaringan sekarang
       updateLastFetch(Date.now());
 
     } catch(e) {
       if (!(cached && cached.data && cached.data.length)){
-        updateLastFetch(null); // tidak ada cache & network gagal → "-"
+        updateLastFetch(null);
         err.textContent = "Gagal memuat data. Klik tombol Debug untuk lihat detail.";
         err.style.display = "block";
       }
@@ -476,23 +471,21 @@
   function buildOperator(ops) {
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(ops.map(function(o){ return { value:o, label:o }; }));
-    // urutan operator untuk pengelompokan cart mengikuti dropdown (ops sudah .sort())
     opRank = new Map(ops.map(function(o,i){ return [o, i]; }));
     opSel.setOptions(options);
     opSel.setValue("", false);
-    updateAddButtonState(); // validasi halus
+    updateAddButtonState();
   }
 
   function buildVoucher() {
     var op = opSel.getValue();
     var items = data.filter(function(d){ return d.operator === op; });
-    // items mempertahankan urutan seperti pada "data" (sheet)
     var options = [{ value:"", label:"--Pilih--"}]
       .concat(items.map(function(d){ return { value:d.nama, label:(d.nama+" - "+rupiah(d.harga)) }; }));
     vSel.setOptions(options, { resetOnOpen: true });
     vSel.setValue("", false);
     document.getElementById("qty").value = "";
-    updateAddButtonState(); // validasi halus
+    updateAddButtonState();
   }
 
   function addToCart() {
@@ -509,11 +502,10 @@
     if (exist) exist.qty += qty;
     else cart.push({ operator: op, nama: nm, harga: v.harga, qty: qty });
 
-    // jaga urutan cart sesuai ranking
     sortCart();
     renderCart();
     document.getElementById("qty").value = "";
-    updateAddButtonState(); // validasi halus
+    updateAddButtonState();
   }
 
   function calcTotals() {
@@ -592,12 +584,11 @@
       tbody.appendChild(tr);
     });
 
-    // ——— CLICK: keyboard & fallback (plus/minus & hapus) ———
+    // ——— CLICK ———
     tbody.onclick = function(e){
       var t = e.target;
       if (!(t instanceof Element)) return;
 
-      // skip click satu kali setelah hold supaya tidak dobel
       if ((t.classList.contains("qty-minus") || t.classList.contains("qty-plus")) && holdState.ignoreClick){
         holdState.ignoreClick = false;
         return;
@@ -615,7 +606,6 @@
         cart[i].qty = (cart[i].qty || 0) + 1;
         renderCart();
       } else if (t.classList.contains("btn-ghost")) {
-        // === Hapus + tawarkan Undo ===
         var removed = { operator: cart[i].operator, nama: cart[i].nama, harga: cart[i].harga, qty: cart[i].qty };
         cart.splice(i, 1);
         renderCart();
@@ -625,12 +615,10 @@
 
     // ——— HOLD (pointer) ———
     if (!holdEventsBound){
-      // start
       const onPointerDown = function(e){
         const t = e.target;
         if (!(t instanceof Element)) return;
         if (t.classList.contains("qty-minus") || t.classList.contains("qty-plus")){
-          // penting di Android: cegah scroll/gesture default
           e.preventDefault();
           const key = rowKeyFromButton(t);
           if (!key) return;
@@ -640,13 +628,10 @@
       };
       tbody.addEventListener("pointerdown", onPointerDown, { passive: false });
 
-      // stop (lepas jari/mouse atau dibatalkan)
       const stopAll = function(){ stopHold(); };
       document.addEventListener("pointerup", stopAll, { passive: true });
       document.addEventListener("pointercancel", stopAll, { passive: true });
 
-
-      // ✅ BLOK contextmenu HANYA pada tombol +/- agar hold tetap jalan
       tbody.addEventListener("contextmenu", function(e){
         const t = e.target;
         if (!(t instanceof Element)) return;
@@ -661,7 +646,6 @@
 
       holdEventsBound = true;
     }
-
 
     // ——— input qty manual ———
     tbody.onchange = function(e){
@@ -678,13 +662,136 @@
     calcTotals();
   }
 
-  // ===== printReceipt aman =====
+  // ====== Dialog konfirmasi (kontras tinggi, solid, nyaman dibaca) ======
+  function confirmDialog(opts){
+    return new Promise(function(resolve){
+      var title = (opts && opts.title) || "Konfirmasi";
+      var message = (opts && opts.message) || "Lanjutkan tindakan ini?";
+      var okText = (opts && opts.okText) || "Ya";
+      var cancelText = (opts && opts.cancelText) || "Batal";
+
+      // Deteksi tema saat ini
+      var isLight = document.documentElement.getAttribute("data-theme") === "light";
+
+      // Warna/kontras yang enak di mata (solid, tidak tembus overlay)
+      var BG     = isLight ? "#ffffff" : "#0f1720";
+      var TEXT   = isLight ? "#0b0f14" : "#eaf2ff";
+      var SUB    = isLight ? "#4b5b6d" : "#cbd8ea";
+      var BORDER = isLight ? "rgba(0,0,0,0.14)" : "rgba(255,255,255,0.18)";
+      var SHADOW = isLight
+        ? "0 18px 55px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.08)"
+        : "0 22px 60px rgba(0,0,0,.55)";
+
+      var overlay = document.createElement("div");
+      Object.assign(overlay.style, {
+        position:"fixed", inset:"0",
+        background:"rgba(0,0,0,0.50)", // cukup gelap, tapi tidak berlebihan
+        display:"flex", alignItems:"center", justifyContent:"center",
+        zIndex:"2000", padding:"16px"
+      });
+
+      var box = document.createElement("div");
+      Object.assign(box.style, {
+        minWidth:"min(460px,100%)", maxWidth:"560px",
+        background: BG,            // SOLID → modal tidak meredup
+        color: TEXT,
+        border:"1px solid " + BORDER,
+        borderRadius:"12px",
+        boxShadow: SHADOW,
+        // JANGAN pakai backdrop-filter di modal supaya tetap tajam
+        padding:"18px 16px 14px"
+      });
+      box.setAttribute("role","dialog");
+      box.setAttribute("aria-modal","true");
+      box.setAttribute("aria-labelledby","confTitle");
+
+      var h = document.createElement("h3");
+      h.id = "confTitle";
+      h.textContent = title;
+      Object.assign(h.style, { margin:"0 0 8px", fontSize:"17px", fontWeight:"700", letterSpacing:"0.2px" });
+
+      var p = document.createElement("p");
+      p.textContent = message;
+      Object.assign(p.style, {
+        margin:"0 0 14px",
+        color: SUB,            // lebih soft tapi tetap terbaca
+        fontSize:"14.5px",
+        lineHeight:"1.55"
+      });
+
+      var row = document.createElement("div");
+      Object.assign(row.style, { display:"flex", gap:"10px", justifyContent:"flex-end", marginTop:"6px" });
+
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn btn-ghost";
+      cancelBtn.textContent = cancelText;
+      Object.assign(cancelBtn.style, {
+        borderColor: BORDER,
+        padding:"10px 14px",
+        fontWeight:"600"
+      });
+
+      var okBtn = document.createElement("button");
+      okBtn.type = "button";
+      okBtn.className = "btn";
+      okBtn.textContent = okText;
+      Object.assign(okBtn.style, {
+        padding:"10px 16px",
+        fontWeight:"700",
+        // sedikit tonjolkan primary tanpa terlalu terang
+        borderColor: "rgba(124,215,255,0.6)"
+      });
+
+      // Nonaktifkan scroll body saat modal terbuka
+      var prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+
+      function close(val){
+        overlay.remove();
+        document.removeEventListener("keydown", onKey);
+        document.body.style.overflow = prevOverflow;
+        resolve(val);
+      }
+      function onKey(e){
+        if (e.key === "Escape"){ e.preventDefault(); close(false); }
+        if (e.key === "Enter"){ e.preventDefault(); close(true); }
+      }
+
+      cancelBtn.addEventListener("click", function(){ close(false); });
+      okBtn.addEventListener("click", function(){ close(true); });
+      overlay.addEventListener("click", function(e){ if (e.target === overlay) close(false); });
+      document.addEventListener("keydown", onKey);
+
+      row.appendChild(cancelBtn);
+      row.appendChild(okBtn);
+      box.appendChild(h);
+      box.appendChild(p);
+      box.appendChild(row);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      try { okBtn.focus(); } catch(_){}
+    });
+  }
+
+
+
+
+  // ===== printReceipt + DEDUPE =====
   function printReceipt() {
     var totals = calcTotals();
     if (cart.length === 0) { alert("Keranjang kosong, tidak ada yang bisa dibagikan."); return; }
+
+    // ID deterministik dari isi keranjang
+    var orderSig = getOrderSig(cart, totals.grand);
+    var orderId  = orderSig.slice(0, 8).toUpperCase();
+    var receiptText = "";
+
     try {
       var lines = [];
       lines.push("STRUK PEMBELIAN VOUCHER");
+      lines.push("No: " + orderId);
       lines.push("--------------------------------");
       var maxLength = 32;
 
@@ -722,7 +829,7 @@
       lines.push(new Date().toLocaleString("id-ID"));
       lines.push("Terima kasih.");
 
-      var receiptText = lines.join("\n");
+      receiptText = lines.join("\n");
 
       if (navigator.share) {
         navigator.share({ title: "Struk Pembelian", text: receiptText })
@@ -739,14 +846,17 @@
       alert("Gagal membagikan struk. Cek konsol untuk detail atau coba lagi.");
     }
 
-    // === KIRIM NOTIF KE ADMIN (fire-and-forget, tanpa secret di client) ===
-      try {
-        var orderId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,7);
-
+    // === KIRIM NOTIF KE ADMIN (dedupe berbasis signature) ===
+    try {
+      var sent = [];
+      try { sent = JSON.parse(sessionStorage.getItem(LAST_SENT_SIGS_KEY) || "[]"); } catch(_){}
+      if (sent.indexOf(orderSig) >= 0) {
+        console.info("Skip notify: No. Struk sudah pernah dikirim:", orderId);
+      } else {
         var payload = {
           orderId: orderId,
+          orderSig: orderSig,
           ts: Date.now(),
-          // ringkas tapi cukup: item per baris
           items: cart.map(function(it){
             return {
               operator: it.operator,
@@ -757,20 +867,22 @@
             };
           }),
           total: totals.grand,
-          // opsional info lingkungan
           client: {
             ua: (navigator && navigator.userAgent) || "",
             lang: (navigator && navigator.language) || ""
           },
-          // opsional: lampirkan teks struk untuk kemudahan admin
           receiptText: receiptText
         };
 
-        // kirim tanpa menunggu (tidak blok UI / print)
         notifyAdmin(payload);
-      } catch(e){
-        console.warn("gagal menyiapkan payload notify:", e);
+
+        sent.push(orderSig);
+        if (sent.length > 50) sent = sent.slice(-50);
+        sessionStorage.setItem(LAST_SENT_SIGS_KEY, JSON.stringify(sent));
       }
+    } catch(e){
+      console.warn("gagal memproses dedupe/notify:", e);
+    }
 
     function showReceiptOverlay(text) {
       var overlay = document.createElement("div");
@@ -839,26 +951,25 @@
   document.addEventListener("DOMContentLoaded", function(){
     // Footer elemen (opsional, kalau ada)
     lastFetchEl = document.getElementById("lastFetch");
-    updateLastFetch(null); // default "-"
+    updateLastFetch(null);
 
-    // Operator: tidak render ulang saat open
+    // Operator
     opSel = createSelect(document.getElementById("opSelect"), {
       placeholder: "--Pilih--",
       onChange: function(){
         buildVoucher();
-        updateAddButtonState(); // validasi halus
+        updateAddButtonState();
       }
     });
-    // Voucher: render ulang hanya saat operator berganti (setOptions dengan resetOnOpen)
+    // Voucher
     vSel = createSelect(document.getElementById("voucherSelect"), {
       placeholder: "--Pilih--",
       onChange: function(){
         var q = document.getElementById("qty");
         q.value = "";
-        // fokus & select supaya langsung ketik qty
         try { q.focus({ preventScroll:true }); } catch(_) { q.focus(); }
         if (q.select) q.select();
-        updateAddButtonState(); // validasi halus
+        updateAddButtonState();
       }
     });
 
@@ -893,7 +1004,6 @@
         btnReload.setAttribute("aria-busy", on ? "true" : "false");
         btnReload.title = on ? "Memuat data…" : "Reload data";
 
-        // Izinkan animasi sementara
         if (on) {
           document.documentElement.setAttribute("data-allow-motion", "true");
         } else {
@@ -905,20 +1015,47 @@
         if (btnReload.disabled) return;
         setReloadLoading(true);
         try {
-          await load(true); // bypass TTL, simpan cache, rerender (footer auto ter-update)
+          await load(true);
         } finally {
           setReloadLoading(false);
-          updateAddButtonState(); // jaga state setelah rerender
+          updateAddButtonState();
         }
       });
     }
 
-    if (btnReset) btnReset.addEventListener("click", function(){
+    // if (btnReset) btnReset.addEventListener("click", function(){
+    //   cart = [];
+    //   renderCart();
+    //   console.log("Keranjang direset");
+    // });
+    // if (btnPrint) btnPrint.addEventListener("click", printReceipt);
+
+    if (btnReset) btnReset.addEventListener("click", async function(){
+      var ok = await confirmDialog({
+        title: "Reset keranjang?",
+        message: "Semua item di keranjang akan dihapus.",
+        okText: "Ya, reset",
+        cancelText: "Batal"
+      });
+      if (!ok) return;
       cart = [];
       renderCart();
       console.log("Keranjang direset");
     });
-    if (btnPrint) btnPrint.addEventListener("click", printReceipt);
+
+    if (btnPrint) btnPrint.addEventListener("click", async function(){
+      var ok = await confirmDialog({
+        title: "Cetak struk?",
+        message: "Struk akan ditampilkan/dibagikan. Notifikasi admin dikirim satu kali per struk.",
+        okText: "Ya, cetak",
+        cancelText: "Batal"
+      });
+      if (!ok) return;
+      printReceipt();
+    });
+
+
+
     if (btnToggleDbg) btnToggleDbg.addEventListener("click", function(){
       var p = document.getElementById("dbg");
       p.style.display = (p.style.display === "none" || !p.style.display) ? "block" : "none";
@@ -951,7 +1088,6 @@
       });
     }
 
-    // Set state awal tombol Tambah
     updateAddButtonState();
   });
 })();
