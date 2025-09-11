@@ -519,7 +519,9 @@ pre{ white-space: pre-wrap; word-break: break-word; background: rgba(255,255,255
 .btn:disabled { opacity:.55; cursor:not-allowed; filter:saturate(.6); }
 
 .app > footer{
-  position: sticky;
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
   text-align: center;
   font-size: 12px;
